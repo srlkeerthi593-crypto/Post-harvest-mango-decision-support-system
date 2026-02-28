@@ -160,6 +160,14 @@ if st.session_state.run:
     ).sort_values("Net Profit",ascending=False).head(10).reset_index(drop=True)
 
     df_top10["Rank"]=df_top10.index+1
+    best=df_top10.iloc[0]
+
+    # ---------------- RECOMMENDATION ----------------
+    st.success(
+        f"🥇 RECOMMENDED OPTION: Sell at **{best['Name']}** "
+        f"({best['Category']}) for maximum estimated profit of "
+        f"₹ {best['Net Profit']:,.0f} 🥭"
+    )
 
     # ---------------- BAR GRAPH ----------------
     st.subheader("📊🥭 Profit Comparison")
@@ -197,7 +205,7 @@ if st.session_state.run:
     pie_fig.update_traces(textinfo="percent+label")
     st.plotly_chart(pie_fig, width="stretch")
 
-    # ---------------- COMPARISON TABLE ----------------
+    # ---------------- TABLE ----------------
     st.subheader("📋🥭 Detailed Comparison Table")
 
     st.dataframe(df_top10[[
@@ -216,10 +224,13 @@ if st.session_state.run:
                   icon=folium.Icon(color="black")).add_to(m)
 
     for _,row in df_top10.iterrows():
+
+        marker_color = "gold" if row["Rank"]==1 else "green"
+
         folium.Marker(
             [row["Lat"],row["Lon"]],
             popup=f"🥭 {row['Name']} ({row['Category']})",
-            icon=folium.Icon(color="green")
+            icon=folium.Icon(color=marker_color)
         ).add_to(m)
 
         folium.PolyLine(
