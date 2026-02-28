@@ -1,6 +1,6 @@
 # ============================================================
 # 🥭 FARMER PROFIT INTELLIGENCE SYSTEM
-# WHITE PROFESSIONAL STREAMLIT DASHBOARD
+# FULLY FIXED UNIVERSAL VERSION
 # ============================================================
 
 import streamlit as st
@@ -11,17 +11,6 @@ from streamlit_folium import st_folium
 import plotly.express as px
 
 st.set_page_config(layout="wide")
-
-# ---------------- WHITE THEME ----------------
-st.markdown("""
-    <style>
-        .stApp { background-color: white; }
-        html, body, [class*="css"]  { background-color: white; color: black; }
-        .stSidebar { background-color: #f8f9fa; }
-        h1, h2, h3 { color: black; font-weight: 700; }
-        .stMetric { font-weight: bold; }
-    </style>
-""", unsafe_allow_html=True)
 
 st.title("🥭 Farmer Profit Intelligence System")
 st.subheader("Smart Mango Marketing Decision Engine")
@@ -112,9 +101,11 @@ if run:
     v_lat = village_row[v_lat_col]
     v_lon = village_row[v_lon_col]
 
+    # Proper merge
     mandi_data = prices.merge(geo, on="market", how="left")
 
     lat_col_m, lon_col_m = detect_lat_lon(mandi_data)
+
     mandi_data = mandi_data.dropna(subset=[lat_col_m, lon_col_m])
 
     mandi_data["distance"] = mandi_data.apply(
@@ -133,15 +124,6 @@ if run:
         "Pickle": pickle_units,
         "Local Export": local_export,
         "Abroad Export": abroad_export
-    }
-
-    margin_map = {
-        "Mandi":0,
-        "Processing":0.03,
-        "Pulp":0.04,
-        "Pickle":0.025,
-        "Local Export":0.05,
-        "Abroad Export":0.07
     }
 
     for category, df in category_dfs.items():
@@ -163,10 +145,18 @@ if run:
                                  row[lat_col],
                                  row[lon_col])
 
-                # Transport: 1 Quintal per 10 km = 2000
                 transport = (dist/10) * 2000 * quantity_qtl
 
-                adjusted_price = base_price * (1+margin_map[category])
+                margin = {
+                    "Mandi":0,
+                    "Processing":0.03,
+                    "Pulp":0.04,
+                    "Pickle":0.025,
+                    "Local Export":0.05,
+                    "Abroad Export":0.07
+                }[category]
+
+                adjusted_price = base_price * (1+margin)
                 revenue = adjusted_price * 100 * quantity_qtl
                 net_profit = revenue - transport
 
@@ -203,11 +193,8 @@ if run:
 
     # ---------------- BAR CHART ----------------
     st.subheader("📊 Profit Comparison (Top 10)")
-    fig = px.bar(df_top10,
-                 x="Name",
-                 y="Net Profit",
-                 color="Category",
-                 text="Net Profit")
+    fig = px.bar(df_top10, x="Name", y="Net Profit",
+                 color="Category", text="Net Profit")
     st.plotly_chart(fig, use_container_width=True)
 
     # ---------------- TABLE ----------------
