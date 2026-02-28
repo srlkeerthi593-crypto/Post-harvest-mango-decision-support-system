@@ -1,6 +1,6 @@
 # ============================================================
 # 🥭 FARMER PROFIT INTELLIGENCE SYSTEM
-# FINAL STABLE VERSION (NO FLICKER • WHITE THEME • 2026 READY)
+# FINAL CLEAN VERSION (DEFAULT STREAMLIT THEME)
 # ============================================================
 
 import streamlit as st
@@ -11,17 +11,6 @@ from streamlit_folium import st_folium
 import plotly.express as px
 
 st.set_page_config(layout="wide")
-
-# ---------------- WHITE THEME ----------------
-st.markdown("""
-    <style>
-        .stApp { background-color: white; }
-        html, body { background-color: white; color: black; }
-        .stSidebar { background-color: #f8f9fa; }
-        h1, h2, h3 { font-weight: 700; }
-        .stMetric { font-weight: bold; }
-    </style>
-""", unsafe_allow_html=True)
 
 st.title("🥭 Farmer Profit Intelligence System")
 st.subheader("Smart Mango Marketing Decision Engine")
@@ -117,7 +106,6 @@ if st.session_state.run_analysis:
     v_lat = village_row[v_lat_col]
     v_lon = village_row[v_lon_col]
 
-    # Merge price and geo on market
     mandi_data = prices.merge(geo, on="market", how="left")
 
     lat_col_m, lon_col_m = detect_lat_lon(mandi_data)
