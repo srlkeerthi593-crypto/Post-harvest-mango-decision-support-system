@@ -284,3 +284,4 @@ Base Price: ₹{base_price}
 Best Option: {best['Name']} ({best['Type']})
 """
     st.download_button("Download Advisory Report", report, "farmer_report.txt")
+
