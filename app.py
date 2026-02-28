@@ -1,6 +1,6 @@
 # ============================================================
 # 🥭 FARMER PROFIT INTELLIGENCE SYSTEM
-# FINAL PROFESSIONAL VERSION (IMPROVED VISUALS)
+# FINAL PROFESSIONAL VERSION (VISUAL ENHANCED)
 # ============================================================
 
 import streamlit as st
@@ -8,12 +8,12 @@ import pandas as pd
 import numpy as np
 import folium
 from streamlit_folium import st_folium
-import plotly.express as px
+import plotly.graph_objects as go
 
 st.set_page_config(layout="wide")
 
-st.title("🥭 Farmer Profit Intelligence System")
-st.subheader("Smart Mango Marketing Decision Engine")
+st.title("🥭 Farmer Profit Intelligence System 🥭")
+st.subheader("🍃 Smart Mango Marketing Decision Engine 🍃")
 
 # ---------------- LOAD DATA ----------------
 @st.cache_data
@@ -62,7 +62,7 @@ def haversine(lat1, lon1, lat2, lon2):
     return R * 2*np.arcsin(np.sqrt(a))
 
 # ---------------- SIDEBAR ----------------
-st.sidebar.header("👨‍🌾 Farmer Details")
+st.sidebar.header("👨‍🌾 Farmer Details 🥭")
 
 farmer_name = st.sidebar.text_input("Farmer Name")
 mobile = st.sidebar.text_input("Mobile Number")
@@ -82,11 +82,10 @@ variety = st.sidebar.selectbox(
 
 quantity_qtl = st.sidebar.number_input("Quantity (Quintals)", min_value=1, value=10)
 
-# ---------------- SESSION STATE ----------------
 if "run_analysis" not in st.session_state:
     st.session_state.run_analysis = False
 
-if st.sidebar.button("🚀 Run Smart Analysis"):
+if st.sidebar.button("🚀 Run Smart Analysis 🥭"):
     st.session_state.run_analysis = True
 
 # ---------------- VARIETY LOGIC ----------------
@@ -103,15 +102,14 @@ variety_acceptance = {
 if st.session_state.run_analysis:
 
     if farmer_name:
-        st.markdown(f"## 🙏 Namaste **{farmer_name}**")
-        st.markdown("### Welcome to your Smart Profit Dashboard")
+        st.markdown(f"## 🙏🥭 Namaste **{farmer_name}** 🥭")
+        st.markdown("### Welcome to your Smart Profit Dashboard 🍃")
 
     village_row = villages[villages[village_name_col] == selected_village].iloc[0]
     v_lat = village_row[v_lat_col]
     v_lon = village_row[v_lon_col]
 
     mandi_data = prices.merge(geo, on="market", how="left")
-
     lat_col_m, lon_col_m = detect_lat_lon(mandi_data)
     mandi_data = mandi_data.dropna(subset=[lat_col_m, lon_col_m])
 
@@ -179,102 +177,88 @@ if st.session_state.run_analysis:
                     "Lon":row[lon_col]
                 })
 
-    df_result = pd.DataFrame(results)
+    df_top10 = pd.DataFrame(results).sort_values(
+        "Net Profit", ascending=False).head(10).reset_index(drop=True)
 
-    if df_result.empty:
-        st.error("❌ No alternatives found. Please check dataset lat/lon columns.")
-        st.stop()
-
-    df_top10 = df_result.sort_values("Net Profit", ascending=False).head(10)
-    df_top10.reset_index(drop=True, inplace=True)
     df_top10["Rank"] = df_top10.index + 1
-
     best = df_top10.iloc[0]
 
     # ---------------- METRICS ----------------
     col1,col2,col3,col4 = st.columns(4)
     col1.metric("💰 Base Price (₹/kg)", round(base_price,2))
-    col2.metric("🏆 Best Market", best["Name"])
+    col2.metric("🏆 Best Alternative", best["Name"])
     col3.metric("🥇 Best Profit (₹)", best["Net Profit"])
     col4.metric("📦 Quantity (Qtl)", quantity_qtl)
 
     st.markdown("---")
 
-    # ---------------- IMPROVED BAR GRAPH ----------------
-    st.subheader("📊 Profit Comparison (Top 10 Alternatives)")
+    # ---------------- ENHANCED BAR GRAPH ----------------
+    st.subheader("📊🥭 Profit Comparison (All Categories Included)")
 
-    df_sorted = df_top10.sort_values("Net Profit", ascending=True)
+    df_sorted = df_top10.sort_values("Net Profit")
 
-    fig = px.bar(
-        df_sorted,
-        x="Net Profit",
-        y="Name",
-        color="Category",
-        orientation="h",
-        text="Net Profit",
-        color_discrete_sequence=px.colors.qualitative.Bold
-    )
+    fig = go.Figure()
+
+    fig.add_trace(go.Bar(
+        y=df_sorted["Name"],
+        x=df_sorted["Net Profit"],
+        orientation='h',
+        text=df_sorted["Net Profit"],
+        textposition="outside",
+        marker=dict(
+            color=df_sorted["Net Profit"],
+            colorscale="YlOrRd",
+            line=dict(color="black", width=1.5)
+        )
+    ))
 
     fig.update_layout(
-        height=700,
+        height=750,
         xaxis_title="Net Profit (₹)",
         yaxis_title="Alternative Name",
-        yaxis=dict(tickfont=dict(size=14)),
+        yaxis=dict(autorange="reversed", tickfont=dict(size=14)),
         xaxis=dict(tickfont=dict(size=14)),
-        legend_title="Category",
-        margin=dict(l=20, r=20, t=40, b=20)
-    )
-
-    fig.update_traces(
-        textposition="outside",
-        textfont=dict(size=13)
+        plot_bgcolor="white"
     )
 
     st.plotly_chart(fig, width="stretch")
 
     # ---------------- TABLE ----------------
-    st.subheader("📋 Top 10 Ranked Alternatives")
+    st.subheader("📋 Top 10 Ranked Alternatives 🥭")
     st.dataframe(df_top10[["Rank","Name","Category","Distance_km","Net Profit"]])
 
-    # ---------------- MAP ----------------
-    st.subheader("🗺 Market Location Map (All Top 10 Alternatives)")
+    # ---------------- MAP WITH ROUTES ----------------
+    st.subheader("🗺🥭 All Top 10 Alternatives with Routes")
 
     m = folium.Map(location=[v_lat,v_lon], zoom_start=9)
 
     folium.Marker(
         [v_lat,v_lon],
         popup=f"🏡 Village: {selected_village}",
-        tooltip="Village",
-        icon=folium.Icon(color="black", icon="home")
+        icon=folium.Icon(color="black")
     ).add_to(m)
 
     for _,row in df_top10.iterrows():
 
-        marker_color = "gold" if row["Rank"] == 1 else "green"
+        color = "gold" if row["Rank"]==1 else "green"
 
         folium.Marker(
             [row["Lat"],row["Lon"]],
-            popup=f"""
-            🥭 Rank: {row['Rank']} <br>
-            📍 Name: {row['Name']} <br>
-            🏷 Category: {row['Category']} <br>
-            💰 Profit: ₹{row['Net Profit']}
-            """,
-            tooltip=row["Name"],
-            icon=folium.Icon(color=marker_color)
+            popup=f"🥭 Rank {row['Rank']} - {row['Name']} ({row['Category']})",
+            icon=folium.Icon(color=color)
         ).add_to(m)
 
         folium.PolyLine(
             [[v_lat,v_lon],[row["Lat"],row["Lon"]]],
-            color=marker_color,
-            weight=3,
-            opacity=0.7
+            color=color,
+            weight=4,
+            opacity=0.8
         ).add_to(m)
 
     st_folium(m, width=1100, height=600)
 
     # ---------------- VARIETY LOGIC ----------------
-    st.subheader("🧠 Variety Filtering Logic")
+    st.subheader("🧠 Variety Filtering Logic 🥭")
 
     for cat, vals in variety_acceptance.items():
         if variety in vals:
