@@ -1,14 +1,14 @@
 # ============================================================
 # 🥭 FARMER PROFIT INTELLIGENCE SYSTEM
-# 🏛 GOVERNMENT-GRADE PROFESSIONAL DASHBOARD
+# 🏛 GOVERNMENT-GRADE PROFESSIONAL DASHBOARD (FIXED)
 # ============================================================
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import folium
+from folium.plugins import HeatMap
 from streamlit_folium import st_folium
-import plotly.graph_objects as go
 import plotly.express as px
 
 st.set_page_config(layout="wide")
@@ -103,7 +103,6 @@ margin_map = {
 if st.session_state.run:
 
     st.markdown(f"## 🙏🥭 Namaste **{farmer_name}**")
-    st.markdown("### 📊 Profit Intelligence Dashboard")
 
     village_row = villages[villages[detect_name(villages)]==selected_village].iloc[0]
     v_lat, v_lon = village_row[detect_lat_lon(villages)[0]], village_row[detect_lat_lon(villages)[1]]
@@ -137,7 +136,6 @@ if st.session_state.run:
 
         for _,row in df.iterrows():
             if pd.notnull(row[lat]) and pd.notnull(row[lon]):
-
                 dist = haversine(v_lat,v_lon,row[lat],row[lon])
                 transport = (dist/10)*2000*quantity_qtl
                 revenue = base_price*(1+margin_map[cat])*100*quantity_qtl
@@ -154,69 +152,29 @@ if st.session_state.run:
 
     df_all = pd.DataFrame(results)
 
-    # ----------- CATEGORY CONTROLLED MAP (TOTAL 10) -----------
-    map_df = pd.concat([
-        df_all[df_all["Category"]=="Mandi"].sort_values("Distance_km").head(3),
-        df_all[df_all["Category"]=="Pulp"].sort_values("Net Profit",ascending=False).head(2),
-        df_all[df_all["Category"]=="Pickle"].sort_values("Net Profit",ascending=False).head(2),
-        df_all[df_all["Category"]=="Local Export"].sort_values("Net Profit",ascending=False).head(2),
-        df_all[df_all["Category"]=="Abroad Export"].sort_values("Net Profit",ascending=False).head(1)
-    ])
+    # ---------------- ANIMATED BAR ----------------
+    st.subheader("📊 Profit Comparison")
 
-    # ---------------- METRICS ----------------
-    best = df_all.sort_values("Net Profit",ascending=False).iloc[0]
-
-    c1,c2,c3,c4 = st.columns(4)
-    c1.metric("💰 Base Price (₹/kg)",round(base_price,2))
-    c2.metric("🏆 Best Option",best["Name"])
-    c3.metric("🥇 Net Profit (₹)",best["Net Profit"])
-    c4.metric("📦 Quantity (Qtl)",quantity_qtl)
-
-    st.markdown("---")
-
-    # ---------------- HIGH VARIATION BAR GRAPH ----------------
-    st.subheader("📊 Profit Comparison (High Variation View)")
-
-    df_sorted = df_all.sort_values("Net Profit")
-
-    fig = go.Figure()
-    fig.add_trace(go.Bar(
-        y=df_sorted["Name"],
-        x=df_sorted["Net Profit"],
-        orientation='h',
-        marker=dict(
-            color=df_sorted["Net Profit"],
-            colorscale="Turbo",
-            line=dict(color="black",width=2)
-        ),
-        text=[f"₹{x:,.0f}" for x in df_sorted["Net Profit"]],
-        textposition="outside"
-    ))
-
-    fig.update_layout(
-        height=800,
-        xaxis_title="Net Profit (₹)",
-        yaxis_title="Alternative",
-        yaxis=dict(autorange="reversed"),
-        plot_bgcolor="white"
+    fig = px.bar(
+        df_all.sort_values("Net Profit"),
+        x="Net Profit",
+        y="Name",
+        color="Category",
+        orientation="h",
+        text="Net Profit",
+        animation_frame="Category"
     )
 
-    st.plotly_chart(fig,width="stretch")
+    fig.update_layout(height=700)
+    st.plotly_chart(fig, width="stretch")
 
-    # ---------------- PIE CHART ----------------
+    # ---------------- PIE ----------------
     st.subheader("🥧 Category Share of Profit")
-
-    pie_df = df_all.groupby("Category")["Net Profit"].sum().reset_index()
-
-    pie = px.pie(pie_df,
-                 names="Category",
-                 values="Net Profit",
-                 hole=0.4)
-
-    st.plotly_chart(pie,width="stretch")
+    pie = px.pie(df_all, names="Category", values="Net Profit", hole=0.4)
+    st.plotly_chart(pie, width="stretch")
 
     # ---------------- MAP ----------------
-    st.subheader("🗺 Top 10 Balanced Alternatives Map")
+    st.subheader("🗺 Heatmap + Alternatives")
 
     m = folium.Map(location=[v_lat,v_lon],zoom_start=9)
 
@@ -224,17 +182,25 @@ if st.session_state.run:
                   popup="🏡 Village",
                   icon=folium.Icon(color="black")).add_to(m)
 
-    for _,row in map_df.iterrows():
+    # Valid folium colors
+    color_map = {
+        "Mandi":"blue",
+        "Processing":"purple",
+        "Pulp":"green",
+        "Pickle":"orange",
+        "Local Export":"cadetblue",
+        "Abroad Export":"red"
+    }
+
+    for _,row in df_all.iterrows():
         folium.Marker(
             [row["Lat"],row["Lon"]],
-            popup=f"🥭 {row['Name']} ({row['Category']})",
-            icon=folium.Icon(color="green")
+            popup=f"{row['Name']} ({row['Category']})",
+            icon=folium.Icon(color=color_map[row["Category"]])
         ).add_to(m)
 
-        folium.PolyLine(
-            [[v_lat,v_lon],[row["Lat"],row["Lon"]]],
-            color="orange",
-            weight=4
-        ).add_to(m)
+    # Heatmap
+    heat_data = [[row["Lat"], row["Lon"], row["Net Profit"]] for _,row in df_all.iterrows()]
+    HeatMap(heat_data, radius=20).add_to(m)
 
     st_folium(m,width=1200,height=650)
