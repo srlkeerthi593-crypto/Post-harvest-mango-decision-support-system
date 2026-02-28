@@ -1,6 +1,6 @@
 # ============================================================
 # 🥭 FARMER PROFIT INTELLIGENCE SYSTEM
-# FINAL PROFESSIONAL VERSION (VISUAL ENHANCED)
+# FINAL PROFESSIONAL VERSION (TOP 10 + ROUTES)
 # ============================================================
 
 import streamlit as st
@@ -37,7 +37,7 @@ def load_data():
 
 villages, prices, geo, processing, pulp, pickle_units, local_export, abroad_export = load_data()
 
-# ---------------- HELPER FUNCTIONS ----------------
+# ---------------- HELPERS ----------------
 def detect_lat_lon(df):
     lat_col, lon_col = None, None
     for c in df.columns:
@@ -179,28 +179,27 @@ if st.session_state.run_analysis:
 
     df_all = pd.DataFrame(results)
 
-    # 🔹 Select Nearest 10 by Distance
-    df_nearest10 = df_all.sort_values(
-        "Distance_km", ascending=True
+    # 🔥 Top 10 by Net Profit
+    df_top10 = df_all.sort_values(
+        "Net Profit", ascending=False
     ).head(10).reset_index(drop=True)
 
-    df_nearest10["Rank"] = df_nearest10.index + 1
-
-    best = df_nearest10.iloc[0]
+    df_top10["Rank"] = df_top10.index + 1
+    best = df_top10.iloc[0]
 
     # ---------------- METRICS ----------------
     col1,col2,col3,col4 = st.columns(4)
     col1.metric("💰 Base Price (₹/kg)", round(base_price,2))
-    col2.metric("🏆 Nearest Alternative", best["Name"])
-    col3.metric("📍 Distance (km)", best["Distance_km"])
+    col2.metric("🏆 Best Alternative", best["Name"])
+    col3.metric("🥇 Best Profit (₹)", best["Net Profit"])
     col4.metric("📦 Quantity (Qtl)", quantity_qtl)
 
     st.markdown("---")
 
     # ---------------- BAR GRAPH ----------------
-    st.subheader("📊🥭 Profit Comparison (Nearest 10)")
+    st.subheader("📊🥭 Profit Comparison (Top 10)")
 
-    df_sorted = df_nearest10.sort_values("Net Profit")
+    df_sorted = df_top10.sort_values("Net Profit")
 
     fig = go.Figure()
 
@@ -221,19 +220,18 @@ if st.session_state.run_analysis:
         height=750,
         xaxis_title="Net Profit (₹)",
         yaxis_title="Alternative Name",
-        yaxis=dict(autorange="reversed", tickfont=dict(size=14)),
-        xaxis=dict(tickfont=dict(size=14)),
+        yaxis=dict(autorange="reversed"),
         plot_bgcolor="white"
     )
 
     st.plotly_chart(fig, width="stretch")
 
     # ---------------- TABLE ----------------
-    st.subheader("📋 Comparison Table - Nearest 10 Alternatives 🥭")
-    st.dataframe(df_nearest10[["Rank","Name","Category","Distance_km","Net Profit"]])
+    st.subheader("📋 Comparison Table - Top 10 Alternatives 🥭")
+    st.dataframe(df_top10[["Rank","Name","Category","Distance_km","Net Profit"]])
 
     # ---------------- MAP WITH ROUTES ----------------
-    st.subheader("🗺🥭 Nearest 10 Alternatives with Routes")
+    st.subheader("🗺🥭 Top 10 Alternatives with Routes (OSM)")
 
     m = folium.Map(location=[v_lat,v_lon], zoom_start=9)
 
@@ -249,7 +247,7 @@ if st.session_state.run_analysis:
         "darkblue","darkred","lightgreen"
     ]
 
-    for idx, row in df_nearest10.iterrows():
+    for idx, row in df_top10.iterrows():
 
         color = valid_colors[idx % len(valid_colors)]
 
