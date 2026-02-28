@@ -1,6 +1,6 @@
 # ============================================================
 # 🥭 FARMER PROFIT INTELLIGENCE SYSTEM
-# FINAL CLEAN VERSION (DEFAULT STREAMLIT THEME)
+# FINAL PROFESSIONAL VERSION
 # ============================================================
 
 import streamlit as st
@@ -82,7 +82,7 @@ variety = st.sidebar.selectbox(
 
 quantity_qtl = st.sidebar.number_input("Quantity (Quintals)", min_value=1, value=10)
 
-# ---------------- SESSION STATE FIX ----------------
+# ---------------- SESSION STATE ----------------
 if "run_analysis" not in st.session_state:
     st.session_state.run_analysis = False
 
@@ -101,6 +101,11 @@ variety_acceptance = {
 
 # ---------------- MAIN ANALYSIS ----------------
 if st.session_state.run_analysis:
+
+    # 🙏 Welcome
+    if farmer_name:
+        st.markdown(f"## 🙏 Namaste **{farmer_name}**")
+        st.markdown("### Welcome to your Smart Profit Dashboard")
 
     village_row = villages[villages[village_name_col] == selected_village].iloc[0]
     v_lat = village_row[v_lat_col]
@@ -144,7 +149,11 @@ if st.session_state.run_analysis:
             continue
 
         lat_col, lon_col = detect_lat_lon(df)
-        name_col = detect_name(df)
+
+        if category == "Mandi":
+            name_col = "market"
+        else:
+            name_col = detect_name(df)
 
         if lat_col is None or lon_col is None:
             continue
@@ -157,7 +166,9 @@ if st.session_state.run_analysis:
                                  row[lat_col],
                                  row[lon_col])
 
+                # Transport Rule: 1 Quintal / 10 km = ₹2000
                 transport = (dist/10) * 2000 * quantity_qtl
+
                 adjusted_price = base_price * (1+margin_map[category])
                 revenue = adjusted_price * 100 * quantity_qtl
                 net_profit = revenue - transport
@@ -192,13 +203,25 @@ if st.session_state.run_analysis:
 
     st.markdown("---")
 
-    # ---------------- BAR CHART ----------------
+    # ---------------- BAR GRAPH ----------------
     st.subheader("📊 Profit Comparison (Top 10)")
-    fig = px.bar(df_top10,
-                 x="Name",
-                 y="Net Profit",
-                 color="Category",
-                 text="Net Profit")
+
+    fig = px.bar(
+        df_top10.sort_values("Net Profit"),
+        x="Net Profit",
+        y="Name",
+        color="Category",
+        orientation="h",
+        text="Net Profit"
+    )
+
+    fig.update_layout(
+        height=600,
+        xaxis_title="Net Profit (₹)",
+        yaxis_title="Market Name"
+    )
+
+    fig.update_traces(textposition="outside")
 
     st.plotly_chart(fig, width="stretch")
 
@@ -208,21 +231,27 @@ if st.session_state.run_analysis:
 
     # ---------------- MAP ----------------
     st.subheader("🗺 Market Location Map")
+
     m = folium.Map(location=[v_lat,v_lon], zoom_start=9)
 
-    folium.Marker([v_lat,v_lon],
-                  popup="Village",
-                  icon=folium.Icon(color="black")).add_to(m)
+    folium.Marker(
+        [v_lat,v_lon],
+        popup=f"Village: {selected_village}",
+        icon=folium.Icon(color="black", icon="home")
+    ).add_to(m)
 
     for _,row in df_top10.iterrows():
-        folium.Marker([row["Lat"],row["Lon"]],
-                      popup=f"Rank {row['Rank']} - {row['Name']}",
-                      icon=folium.Icon(color="green")).add_to(m)
+        folium.Marker(
+            [row["Lat"],row["Lon"]],
+            popup=f"Rank {row['Rank']} - {row['Name']} ({row['Category']})",
+            icon=folium.Icon(color="green")
+        ).add_to(m)
 
     st_folium(m, width=1000, height=500)
 
     # ---------------- VARIETY LOGIC ----------------
     st.subheader("🧠 Variety Filtering Logic")
+
     for cat, vals in variety_acceptance.items():
         if variety in vals:
             st.success(f"✔ {cat} accepts {variety}")
