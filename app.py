@@ -1,221 +1,175 @@
-# ==========================================================
-# 🥭 FARMER PROFIT INTELLIGENCE SYSTEM
-# Top 10 Alternatives + Profit Bar Graph + OSM Map
-# ==========================================================
+# ===============================================================
+# 🥭 GEO-BI REALISTIC ROUTING MANGO INTELLIGENCE SYSTEM
+# Real OSM Routing + Profit Optimization
+# ===============================================================
 
 import streamlit as st
 import pandas as pd
-import plotly.express as px
+import requests
+import random
 import folium
 from streamlit_folium import st_folium
-import os
 
 st.set_page_config(layout="wide")
 
-# ==========================================================
-# 🔥 BACKGROUND IMAGE (URL BASED - CLOUD SAFE)
-# ==========================================================
-
-BACKGROUND_IMAGE_URL = "PASTE_RAW_IMAGE_URL_HERE"
-
-st.markdown(f"""
-<style>
-html, body, [data-testid="stAppViewContainer"] {{
-    background: url("{BACKGROUND_IMAGE_URL}") no-repeat center center fixed;
-    background-size: cover;
-}}
-
-.overlay {{
-    background-color: rgba(0,0,0,0.85);
-    padding: 25px;
-    border-radius: 20px;
-}}
-
-h1,h2,h3,h4,h5,p,label {{
-    color: white !important;
-}}
-
-[data-testid="stMetricValue"] {{
-    color: #00FF7F !important;
-    font-weight: bold;
-}}
-</style>
-""", unsafe_allow_html=True)
-
-# ==========================================================
-# 👨‍🌾 FARMER REGISTRATION
-# ==========================================================
-
-FARMER_DB = "farmers_database.csv"
-
-if not os.path.exists(FARMER_DB):
-    pd.DataFrame(columns=["Name","Mobile","Village"]).to_csv(FARMER_DB, index=False)
-
-if "registered" not in st.session_state:
-    st.session_state.registered = False
-
-st.sidebar.title("👨‍🌾 Farmer Registration")
-
-name = st.sidebar.text_input("Farmer Name")
-mobile = st.sidebar.text_input("Mobile Number")
-village = st.sidebar.text_input("Village")
-
-if st.sidebar.button("Register Farmer"):
-    if name and mobile and village:
-        new = pd.DataFrame([[name,mobile,village]],
-                           columns=["Name","Mobile","Village"])
-        new.to_csv(FARMER_DB, mode="a", header=False, index=False)
-
-        st.session_state.registered = True
-        st.session_state.farmer = {
-            "Name": name,
-            "Mobile": mobile,
-            "Village": village
-        }
-        st.sidebar.success("Registration Successful")
-    else:
-        st.sidebar.error("Fill all details")
-
-if not st.session_state.registered:
-    st.title("🔒 Please Register First")
-    st.stop()
-
-farmer = st.session_state.farmer
-
-# ==========================================================
-# HEADER
-# ==========================================================
-
-st.markdown(f"""
-<div class="overlay">
-<h1 style="text-align:center;">🥭 Farmer Profit Intelligence System</h1>
-<h4 style="text-align:center;">Smart Mango Marketing Decision Engine</h4>
-<p style="text-align:center;">
-Farmer: {farmer['Name']} | Village: {farmer['Village']} | Mobile: {farmer['Mobile']}
-</p>
-</div>
-""", unsafe_allow_html=True)
-
-# ==========================================================
+# ===============================================================
 # LOAD DATA
-# ==========================================================
+# ===============================================================
 
 @st.cache_data
-def load_data():
-    df = pd.read_csv("cleaned_price_data.csv")
-    df.columns = df.columns.str.strip()
-    df["revenue_type"] = df["revenue_type"].astype(str).str.strip()
-    df["today_price(rs/kg)"] = pd.to_numeric(df["today_price(rs/kg)"], errors="coerce").fillna(0)
-    return df
+def load_all_data():
+    price = pd.read_csv("cleaned_price_data.csv")
+    geo = pd.read_csv("cleaned_geolocations.csv")
+    local = pd.read_csv("cleaned_local_export.csv")
+    pickle_units = pd.read_csv("cleaned_pickle_units.csv")
+    pulp = pd.read_csv("Pulp_units_merged_lat_long.csv")
+    villages = pd.read_csv("Village_data.csv")
 
-df = load_data()
+    return price, geo, local, pickle_units, pulp, villages
 
-# ==========================================================
-# VARIETY LOGIC
-# ==========================================================
+price_df, geo_df, local_df, pickle_df, pulp_df, village_df = load_all_data()
 
-variety_acceptance = {
-    "Mandi": ["Banganapalli","Totapuri","Neelam","Rasalu"],
-    "Processing": ["Totapuri","Neelam"],
-    "Pulp": ["Totapuri"],
-    "Pickle": ["Totapuri","Rasalu"],
-    "Local Export": ["Banganapalli"],
-    "Abroad Export": ["Banganapalli"]
-}
+# ===============================================================
+# RANDOM VILLAGE SELECTION
+# ===============================================================
 
-# ==========================================================
-# ANALYSIS
-# ==========================================================
+random_village = village_df.sample(1).iloc[0]
 
-st.sidebar.title("📊 Market Analysis")
+village_lat = random_village["Latitude"]
+village_lon = random_village["Longitude"]
+village_name = random_village["Gram Panchayat"]
 
-variety = st.sidebar.selectbox(
-    "Select Mango Variety",
-    ["Banganapalli","Totapuri","Neelam","Rasalu"]
+st.title("🌍 Geo-BI Mango Alternative Optimizer")
+st.subheader(f"Selected Village: {village_name}")
+
+# ===============================================================
+# MERGE ALL ALTERNATIVES
+# ===============================================================
+
+mandis = price_df[["market","lat","long","revenue_type","today_price(rs/kg)"]]
+mandis.columns = ["name","lat","lon","category","price"]
+
+local_df2 = local_df[["hub_/_firm_name","latitude","longitude"]]
+local_df2.columns = ["name","lat","lon"]
+local_df2["category"] = "Local Export"
+local_df2["price"] = price_df["today_price(rs/kg)"].mean() * 1.15
+
+pickle_df2 = pickle_df[["firm_name","latitude","longitude"]]
+pickle_df2.columns = ["name","lat","lon"]
+pickle_df2["category"] = "Pickle"
+pickle_df2["price"] = price_df["today_price(rs/kg)"].mean() * 1.10
+
+pulp_df2 = pulp_df[["Facility Name","Latitude","Longitude"]]
+pulp_df2.columns = ["name","lat","lon"]
+pulp_df2["category"] = "Pulp"
+pulp_df2["price"] = price_df["today_price(rs/kg)"].mean() * 1.20
+
+all_alternatives = pd.concat(
+    [mandis, local_df2, pickle_df2, pulp_df2],
+    ignore_index=True
 )
 
-TONNES = st.sidebar.number_input("Enter Quantity (Tonnes)", 1, 100, 10)
+# ===============================================================
+# REAL OSM ROUTING FUNCTION (OSRM API)
+# ===============================================================
 
-if st.sidebar.button("Run Smart Analysis"):
+def get_route_distance(lat1, lon1, lat2, lon2):
+    url = f"http://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}?overview=full&geometries=geojson"
+    response = requests.get(url)
+    data = response.json()
 
-    allowed_categories = []
+    if "routes" in data:
+        distance_km = data["routes"][0]["distance"] / 1000
+        geometry = data["routes"][0]["geometry"]
+        return distance_km, geometry
+    else:
+        return None, None
 
-    for category, varieties in variety_acceptance.items():
-        if variety in varieties:
-            allowed_categories.append(category)
+# ===============================================================
+# PROCESS ROUTING
+# ===============================================================
 
-    filtered_df = df[df["revenue_type"].isin(allowed_categories)]
+results = []
 
-    if filtered_df.empty:
-        st.error("No suitable alternatives found.")
-        st.stop()
-
-    # Profit Calculation
-    filtered_df["Revenue"] = filtered_df["today_price(rs/kg)"] * TONNES * 1000
-    filtered_df["TransportCost"] = 8000
-    filtered_df["NetProfit"] = filtered_df["Revenue"] - filtered_df["TransportCost"]
-
-    top10 = filtered_df.sort_values("NetProfit", ascending=False).head(10)
-
-    best = top10.iloc[0]
-
-    st.markdown('<div class="overlay">', unsafe_allow_html=True)
-
-    # ================= KPI SECTION =================
-
-    col1,col2,col3,col4 = st.columns(4)
-
-    col1.metric("Selected Variety", variety)
-    col2.metric("Best Market", best["market"])
-    col3.metric("Base Price (₹/kg)", best["today_price(rs/kg)"])
-    col4.metric("Best Profit (₹)", f"{int(best['NetProfit']):,}")
-
-    # ================= BAR GRAPH =================
-
-    st.markdown("### 📊 Top 10 Profit Comparison")
-
-    fig = px.bar(
-        top10,
-        x="market",
-        y="NetProfit",
-        title="Top 10 Best Market Alternatives",
-        text="NetProfit"
+for _, row in all_alternatives.iterrows():
+    dist, geom = get_route_distance(
+        village_lat, village_lon,
+        row["lat"], row["lon"]
     )
 
-    fig.update_layout(
-        xaxis_tickangle=-45,
-        plot_bgcolor="rgba(0,0,0,0)",
-        paper_bgcolor="rgba(0,0,0,0)",
-        font=dict(color="white")
-    )
+    if dist is None:
+        continue
 
-    st.plotly_chart(fig, use_container_width=True)
+    if dist <= 80:
 
-    # ================= TABLE =================
+        transport_cost = dist * 2000
+        revenue = row["price"] * 1000 * 10
+        net_profit = revenue - transport_cost
 
-    st.markdown("### 📋 Top 10 Alternatives Details")
+        results.append({
+            "name": row["name"],
+            "category": row["category"],
+            "distance_km": dist,
+            "price": row["price"],
+            "net_profit": net_profit,
+            "geometry": geom,
+            "lat": row["lat"],
+            "lon": row["lon"]
+        })
 
-    st.dataframe(
-        top10[["market","revenue_type","today_price(rs/kg)","NetProfit"]],
-        use_container_width=True
-    )
+results_df = pd.DataFrame(results)
 
-    # ================= OSM MAP =================
+if results_df.empty:
+    st.error("No alternatives within 80 km.")
+    st.stop()
 
-    st.markdown("### 🗺 Market Location Map (OSM)")
+# ===============================================================
+# TOP 10 CLOSEST
+# ===============================================================
 
-    m = folium.Map(
-        location=[top10.iloc[0]["lat"], top10.iloc[0]["long"]],
-        zoom_start=8
-    )
+top10 = results_df.sort_values("distance_km").head(10)
 
-    for _, row in top10.iterrows():
-        folium.Marker(
-            [row["lat"], row["long"]],
-            popup=f"{row['market']} | Profit: ₹{int(row['NetProfit'])}",
-            icon=folium.Icon(color="green")
-        ).add_to(m)
+# 2 PER CATEGORY
+top2_per_cat = (
+    results_df.sort_values("net_profit", ascending=False)
+    .groupby("category")
+    .head(2)
+)
 
-    st_folium(m, width=1000)
+# ===============================================================
+# DISPLAY TABLES
+# ===============================================================
 
-    st.markdown("</div>", unsafe_allow_html=True)
+st.subheader("🏆 Top 10 Closest Alternatives")
+st.dataframe(top10[["name","category","distance_km","net_profit"]])
+
+st.subheader("📊 Top 2 Per Category (Most Profitable)")
+st.dataframe(top2_per_cat[["name","category","distance_km","net_profit"]])
+
+# ===============================================================
+# OSM REAL ROUTE MAP
+# ===============================================================
+
+st.subheader("🗺 Real OSM Routing Map")
+
+m = folium.Map(location=[village_lat, village_lon], zoom_start=9)
+
+# Village Marker
+folium.Marker(
+    [village_lat, village_lon],
+    popup="Village",
+    icon=folium.Icon(color="red")
+).add_to(m)
+
+# Add Routes
+for _, row in top10.iterrows():
+
+    folium.Marker(
+        [row["lat"], row["lon"]],
+        popup=f"{row['name']} | ₹{int(row['net_profit'])}",
+        icon=folium.Icon(color="green")
+    ).add_to(m)
+
+    folium.GeoJson(row["geometry"]).add_to(m)
+
+st_folium(m, width=1200)
