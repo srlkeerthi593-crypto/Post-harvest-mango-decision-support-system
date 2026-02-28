@@ -1,6 +1,6 @@
 # ============================================================
-# 🥭 MANGO MARKET DECISION INTELLIGENCE DASHBOARD 🥭
-# Advanced Agricultural Profit Optimization System
+# 🥭 FARMER’S MANGO PROFIT NAVIGATOR 🥭
+# Find the Best Market. Earn the Highest Return.
 # ============================================================
 
 import streamlit as st
@@ -13,8 +13,8 @@ import plotly.express as px
 
 st.set_page_config(layout="wide")
 
-st.title("🥭 Mango Market Decision Intelligence Dashboard 🥭")
-st.subheader("📊 Advanced Agricultural Profit Optimization System 🥭")
+st.title("🥭 Farmer’s Mango Profit Navigator 🥭")
+st.subheader("🧭 Find the Best Market. Earn the Highest Return.")
 
 # ---------------- LOAD DATA ----------------
 @st.cache_data
@@ -45,7 +45,6 @@ def detect_lat_lon(df):
     return lat, lon
 
 def detect_name(df):
-    # Strict real name usage from CSV
     priority_cols = ["market", "unit_name", "company_name", "place", "name"]
     for col in priority_cols:
         if col in df.columns:
@@ -147,7 +146,7 @@ if st.session_state.run:
 
                 results.append({
                     "Category":cat,
-                    "Name":row[name_col],  # REAL CSV NAMES
+                    "Name":row[name_col],
                     "Distance_km":round(dist,2),
                     "Revenue":round(revenue,2),
                     "Transport Cost":round(transport,2),
@@ -161,7 +160,6 @@ if st.session_state.run:
     ).sort_values("Net Profit",ascending=False).head(10).reset_index(drop=True)
 
     df_top10["Rank"]=df_top10.index+1
-    best=df_top10.iloc[0]
 
     # ---------------- BAR GRAPH ----------------
     st.subheader("📊🥭 Profit Comparison")
