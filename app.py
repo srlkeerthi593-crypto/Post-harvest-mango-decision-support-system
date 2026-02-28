@@ -1,36 +1,38 @@
 # ==========================================================
-# 🥭 FARMER PROFIT INTELLIGENCE SYSTEM
-# Professional Mango Decision Dashboard
+# 🥭 FARMER PROFIT INTELLIGENCE SYSTEM (FINAL STABLE VERSION)
+# Background + Registration + Real CSV Filtering
 # ==========================================================
 
 import streamlit as st
 import pandas as pd
 import os
 
-st.set_page_config(page_title="Farmer Profit Intelligence System", layout="wide")
+st.set_page_config(layout="wide")
 
 # ==========================================================
-# 🔥 MANGO BACKGROUND (Cloud Safe - No File Error)
+# 🔥 FORCE BACKGROUND IMAGE (WORKS ON STREAMLIT CLOUD)
 # ==========================================================
 
-BACKGROUND_IMAGE_URL = "PASTE_YOUR_RAW_GITHUB_IMAGE_URL_HERE"
+BACKGROUND_IMAGE_URL = "PASTE_RAW_URL_HERE"
 
 st.markdown(f"""
 <style>
-.stApp {{
-    background-image: url("{BACKGROUND_IMAGE_URL}");
+html, body, [data-testid="stAppViewContainer"] {{
+    background: url("{BACKGROUND_IMAGE_URL}") no-repeat center center fixed;
     background-size: cover;
-    background-position: center;
-    background-attachment: fixed;
+}}
+
+[data-testid="stHeader"] {{
+    background: transparent;
 }}
 
 .overlay {{
-    background-color: rgba(0, 0, 0, 0.80);
+    background-color: rgba(0,0,0,0.85);
     padding: 30px;
-    border-radius: 15px;
+    border-radius: 20px;
 }}
 
-h1, h2, h3, h4, h5, p, label {{
+h1,h2,h3,h4,h5,p,label {{
     color: white !important;
 }}
 
@@ -42,7 +44,7 @@ h1, h2, h3, h4, h5, p, label {{
 """, unsafe_allow_html=True)
 
 # ==========================================================
-# 📁 FARMER DATABASE
+# 👨‍🌾 FARMER REGISTRATION DATABASE
 # ==========================================================
 
 FARMER_DB = "farmers_database.csv"
@@ -54,7 +56,7 @@ if "registered" not in st.session_state:
     st.session_state.registered = False
 
 # ==========================================================
-# 👨‍🌾 SIDEBAR REGISTRATION
+# SIDEBAR REGISTRATION
 # ==========================================================
 
 st.sidebar.title("👨‍🌾 Farmer Registration")
@@ -66,10 +68,9 @@ village = st.sidebar.text_input("Village")
 if st.sidebar.button("Register Farmer"):
 
     if name and mobile and village:
-
-        new_farmer = pd.DataFrame([[name,mobile,village]],
-                                  columns=["Name","Mobile","Village"])
-        new_farmer.to_csv(FARMER_DB, mode="a", header=False, index=False)
+        new_data = pd.DataFrame([[name,mobile,village]],
+                                columns=["Name","Mobile","Village"])
+        new_data.to_csv(FARMER_DB, mode="a", header=False, index=False)
 
         st.session_state.registered = True
         st.session_state.farmer = {
@@ -81,16 +82,16 @@ if st.sidebar.button("Register Farmer"):
         st.sidebar.success("Registration Successful")
 
     else:
-        st.sidebar.error("Fill all details")
+        st.sidebar.error("Please fill all details")
 
 if not st.session_state.registered:
-    st.title("🔒 Please Register to Access Dashboard")
+    st.title("🔒 Please Register First")
     st.stop()
 
 farmer = st.session_state.farmer
 
 # ==========================================================
-# 🥭 HEADER
+# HEADER
 # ==========================================================
 
 st.markdown(f"""
@@ -104,20 +105,23 @@ Farmer: {farmer['Name']} | Village: {farmer['Village']} | Mobile: {farmer['Mobil
 """, unsafe_allow_html=True)
 
 # ==========================================================
-# 📊 LOAD REAL CSV DATA
+# LOAD CSV DATA (FAST + SAFE)
 # ==========================================================
 
 @st.cache_data
 def load_data():
     df = pd.read_csv("cleaned_price_data.csv")
     df.columns = df.columns.str.strip()
-    df["today_price(rs/kg)"] = pd.to_numeric(df["today_price(rs/kg)"], errors="coerce").fillna(0)
+    df["revenue_type"] = df["revenue_type"].astype(str).str.strip()
+    df["today_price(rs/kg)"] = pd.to_numeric(
+        df["today_price(rs/kg)"], errors="coerce"
+    ).fillna(0)
     return df
 
 df = load_data()
 
 # ==========================================================
-# 🧠 VARIETY LOGIC (Your Original Logic)
+# 🧠 VARIETY LOGIC (FROM YOUR ORIGINAL COLAB)
 # ==========================================================
 
 variety_acceptance = {
@@ -130,7 +134,7 @@ variety_acceptance = {
 }
 
 # ==========================================================
-# 📈 MARKET ANALYSIS
+# MARKET ANALYSIS
 # ==========================================================
 
 st.sidebar.title("📊 Market Analysis")
@@ -153,7 +157,7 @@ if st.sidebar.button("Run Smart Analysis"):
     filtered_df = df[df["revenue_type"].isin(allowed_categories)]
 
     if filtered_df.empty:
-        st.error("No suitable alternatives for selected variety.")
+        st.error("No suitable alternatives found for selected variety.")
         st.stop()
 
     # Profit Calculation
