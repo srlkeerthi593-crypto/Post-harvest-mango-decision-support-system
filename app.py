@@ -1,27 +1,42 @@
-# ============================================================
-# PROFESSIONAL FARMER DECISION SUPPORT SYSTEM (STREAMLIT)
-# Full Logic Version - Converted from Colab
-# ============================================================
-
 import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
 import folium
 import plotly.express as px
-from streamlit.components.v1 import html
+from streamlit_folium import st_folium
+from datetime import datetime
 
-st.set_page_config(page_title="Farmer DSS", layout="wide")
+st.set_page_config(page_title="Farmer Decision Intelligence", layout="wide")
 
-st.title("🍋 Professional Farmer Decision Support System")
+# ==============================
+# ATTRACTIVE BACKGROUND
+# ==============================
+page_bg = """
+<style>
+[data-testid="stAppViewContainer"] {
+    background: linear-gradient(135deg, #f6d365 0%, #fda085 100%);
+}
+[data-testid="stSidebar"] {
+    background-color: #ffffff;
+}
+</style>
+"""
+st.markdown(page_bg, unsafe_allow_html=True)
 
-# ================= CONFIG =================
+st.title("🥭 Farmer Decision Intelligence System")
+
+# ==============================
+# CONFIG
+# ==============================
 RADIUS_KM = 80
 TRANSPORT_RATE_PER_10KM_PER_TONNE = 2000
 SPOILAGE_PER_10KM = 0.004
 HANDLING_RISK = 0.002
 
-# ================= LOAD DATA =================
+# ==============================
+# LOAD DATA
+# ==============================
 @st.cache_data
 def load_data():
     villages = pd.read_csv("Village data.csv")
@@ -39,10 +54,11 @@ def load_data():
 
     return villages, prices, geo, processing, pulp, pickle_units, local_export, abroad_export
 
-
 villages, prices, geo, processing, pulp, pickle_units, local_export, abroad_export = load_data()
 
-# ================= HELPER =================
+# ==============================
+# HELPER FUNCTIONS
+# ==============================
 def haversine(lat1, lon1, lat2, lon2):
     R = 6371
     lat1, lon1, lat2, lon2 = map(np.radians,[lat1, lon1, lat2, lon2])
@@ -50,7 +66,6 @@ def haversine(lat1, lon1, lat2, lon2):
     dlon = lon2 - lon1
     a = np.sin(dlat/2)**2 + np.cos(lat1)*np.cos(lat2)*np.sin(dlon/2)**2
     return R * 2*np.arcsin(np.sqrt(a))
-
 
 def detect_cols(df):
     name, lat, lon = None, None, None
@@ -61,25 +76,40 @@ def detect_cols(df):
             name = c
     return name, lat, lon
 
-# ================= SIDEBAR =================
-st.sidebar.header("Farmer Input Panel")
+# ==============================
+# FARMER REGISTRATION
+# ==============================
+st.sidebar.header("🧑‍🌾 Farmer Registration")
 
-village_input = st.sidebar.text_input("Enter Village Name")
+farmer_name = st.sidebar.text_input("Farmer Name")
+mobile = st.sidebar.text_input("Mobile")
+district = st.sidebar.text_input("District")
+
+if st.sidebar.button("Register Farmer"):
+    st.session_state["farmer"] = {
+        "Name": farmer_name,
+        "Mobile": mobile,
+        "District": district
+    }
+    st.sidebar.success("Registered Successfully")
+
+# ==============================
+# INPUT PANEL
+# ==============================
+st.sidebar.header("📊 Crop Input")
+
+village_input = st.sidebar.text_input("Village Name")
 variety = st.sidebar.selectbox(
-    "Select Mango Variety",
+    "Mango Variety",
     ["Banganapalli","Totapuri","Neelam","Rasalu"]
 )
-
-TONNES = st.sidebar.number_input(
-    "Enter Quantity (Tonnes)",
-    min_value=1,
-    max_value=100,
-    value=10
-)
+TONNES = st.sidebar.number_input("Quantity (Tonnes)", min_value=1, value=10)
 
 run = st.sidebar.button("Run Smart Analysis")
 
-# ================= VARIETY LOGIC =================
+# ==============================
+# VARIETY ACCEPTANCE
+# ==============================
 variety_acceptance = {
     "Mandi": ["Banganapalli","Totapuri","Neelam","Rasalu"],
     "Processing": ["Totapuri","Neelam"],
@@ -98,28 +128,33 @@ category_params = {
     "Abroad Export": {"margin":0.07, "color":"red"},
 }
 
-# ================= RUN =================
+# ==============================
+# RUN LOGIC
+# ==============================
 if run:
 
     v_name_col, v_lat_col, v_lon_col = detect_cols(villages)
     villages[v_name_col] = villages[v_name_col].str.lower()
 
     if village_input.lower() not in villages[v_name_col].values:
-        st.error("Village not found in dataset")
+        st.error("Village not found")
         st.stop()
 
     village = villages[villages[v_name_col] == village_input.lower()].iloc[0]
     v_lat = village[v_lat_col]
     v_lon = village[v_lon_col]
 
-    st.subheader("Variety Logic")
-    accepted = [c for c in variety_acceptance if variety in variety_acceptance[c]]
+    st.subheader("🧠 Variety Logic")
+
+    allowed = [c for c in variety_acceptance if variety in variety_acceptance[c]]
     rejected = [c for c in variety_acceptance if variety not in variety_acceptance[c]]
 
-    st.success(f"Allowed Categories: {accepted}")
+    st.success(f"Allowed Categories: {allowed}")
     st.error(f"Not Suitable: {rejected}")
 
-    # ================= BASE PRICE =================
+    # ==============================
+    # BASE MARKET PRICE
+    # ==============================
     mandi_data = prices.merge(geo, on="market", how="left")
     mandi_data = mandi_data.dropna(subset=["latitude","longitude"])
 
@@ -130,11 +165,13 @@ if run:
     nearest = mandi_data.loc[mandi_data["approx"].idxmin()]
     base_price = nearest["today_price(rs/kg)"]
 
-    st.subheader("Nearest Market")
+    st.subheader("🏪 Nearest Market")
     st.write("Market:", nearest["market"])
     st.write("Base Price (₹/kg):", base_price)
 
-    # ================= COLLECT OPTIONS =================
+    # ==============================
+    # COLLECT OPTIONS
+    # ==============================
     def collect_all(df, category):
         if variety not in variety_acceptance[category]:
             return pd.DataFrame()
@@ -153,7 +190,6 @@ if run:
                         "Lon":row[lon_col],
                         "Approx":approx
                     })
-
         return pd.DataFrame(rows)
 
     df_all = pd.concat([
@@ -200,35 +236,31 @@ if run:
             "Type":cat,
             "Name":row["Name"],
             "Distance_km":round(km,2),
-            "Revenue":round(revenue,2),
-            "Transport":round(transport,2),
-            "Risk_Cost":round(risk_cost,2),
             "Net_Profit":round(net_profit,2),
             "Lat":row["Lat"],
             "Lon":row["Lon"]
         })
 
     df = pd.DataFrame(results)
-
     df_top10 = df.sort_values("Distance_km").head(10)
 
-    st.subheader("Top 10 Closest Options")
+    st.subheader("📊 Top 10 Closest Options")
     st.dataframe(df_top10)
 
-    # ================= BEST =================
     best = df_top10.loc[df_top10["Net_Profit"].idxmax()]
+    st.success(f"🏆 Most Profitable: {best['Name']} ({best['Type']})")
 
-    st.success("🏆 Most Profitable Option")
-    st.write(best)
-
-    # ================= PROFIT GRAPH =================
+    # ==============================
+    # PROFIT CHART
+    # ==============================
     fig = px.bar(df_top10, x="Name", y="Net_Profit",
-                 title="Profit Comparison")
+                 title="Net Profit Comparison")
     st.plotly_chart(fig, use_container_width=True)
 
-    # ================= MAP =================
+    # ==============================
+    # MAP
+    # ==============================
     m = folium.Map(location=[v_lat, v_lon], zoom_start=10)
-
     folium.Marker([v_lat, v_lon], popup="Village").add_to(m)
 
     for _, row in df_top10.iterrows():
@@ -237,4 +269,18 @@ if run:
             popup=f"{row['Name']} ({row['Type']})"
         ).add_to(m)
 
-    html(m._repr_html_(), height=600)
+    st_folium(m, width=1000)
+
+    # ==============================
+    # REPORT DOWNLOAD
+    # ==============================
+    farmer_info = st.session_state.get("farmer", {})
+    report = f"""
+Farmer: {farmer_info.get('Name','-')}
+Village: {village_input}
+Variety: {variety}
+Quantity: {TONNES} tonnes
+Base Price: ₹{base_price}
+Best Option: {best['Name']} ({best['Type']})
+"""
+    st.download_button("Download Advisory Report", report, "farmer_report.txt")
