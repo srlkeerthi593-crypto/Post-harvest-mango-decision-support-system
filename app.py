@@ -1,6 +1,6 @@
 # ============================================================
 # 🥭 FARMER PROFIT INTELLIGENCE SYSTEM
-# FINAL STABLE VERSION (CUSTOMIZED TO YOUR CSV STRUCTURE)
+# WHITE PROFESSIONAL STREAMLIT DASHBOARD
 # ============================================================
 
 import streamlit as st
@@ -12,11 +12,14 @@ import plotly.express as px
 
 st.set_page_config(layout="wide")
 
-# ---------------- STYLE ----------------
+# ---------------- WHITE THEME ----------------
 st.markdown("""
     <style>
-    body {background-color: #f4f7fb;}
-    .stMetric {font-size:20px;}
+        .stApp { background-color: white; }
+        html, body, [class*="css"]  { background-color: white; color: black; }
+        .stSidebar { background-color: #f8f9fa; }
+        h1, h2, h3 { color: black; font-weight: 700; }
+        .stMetric { font-weight: bold; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -45,15 +48,38 @@ def load_data():
 
 villages, prices, geo, processing, pulp, pickle_units, local_export, abroad_export = load_data()
 
+# ---------------- HELPER FUNCTIONS ----------------
+def detect_lat_lon(df):
+    lat_col, lon_col = None, None
+    for c in df.columns:
+        if "lat" in c:
+            lat_col = c
+        if "lon" in c or "long" in c:
+            lon_col = c
+    return lat_col, lon_col
+
+def detect_name(df):
+    for c in df.columns:
+        if any(x in c for x in ["place","market","panchayat","mandal","name"]):
+            return c
+    return df.columns[0]
+
+def haversine(lat1, lon1, lat2, lon2):
+    R = 6371
+    lat1, lon1, lat2, lon2 = map(np.radians,[lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = np.sin(dlat/2)**2 + np.cos(lat1)*np.cos(lat2)*np.sin(dlon/2)**2
+    return R * 2*np.arcsin(np.sqrt(a))
+
 # ---------------- SIDEBAR ----------------
 st.sidebar.header("👨‍🌾 Farmer Details")
 
 farmer_name = st.sidebar.text_input("Farmer Name")
 mobile = st.sidebar.text_input("Mobile Number")
 
-village_name_col = "gram panchayat"
-v_lat_col = "latitude"
-v_lon_col = "longitude"
+village_name_col = detect_name(villages)
+v_lat_col, v_lon_col = detect_lat_lon(villages)
 
 selected_village = st.sidebar.selectbox(
     "Select Village",
@@ -79,15 +105,6 @@ variety_acceptance = {
     "Abroad Export": ["Banganapalli"]
 }
 
-# ---------------- DISTANCE FUNCTION ----------------
-def haversine(lat1, lon1, lat2, lon2):
-    R = 6371
-    lat1, lon1, lat2, lon2 = map(np.radians,[lat1, lon1, lat2, lon2])
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
-    a = np.sin(dlat/2)**2 + np.cos(lat1)*np.cos(lat2)*np.sin(dlon/2)**2
-    return R * 2*np.arcsin(np.sqrt(a))
-
 # ---------------- MAIN ANALYSIS ----------------
 if run:
 
@@ -95,13 +112,13 @@ if run:
     v_lat = village_row[v_lat_col]
     v_lon = village_row[v_lon_col]
 
-    # Correct merge
     mandi_data = prices.merge(geo, on="market", how="left")
 
-    mandi_data = mandi_data.dropna(subset=["latitude","longitude"])
+    lat_col_m, lon_col_m = detect_lat_lon(mandi_data)
+    mandi_data = mandi_data.dropna(subset=[lat_col_m, lon_col_m])
 
     mandi_data["distance"] = mandi_data.apply(
-        lambda r: haversine(v_lat,v_lon,r["latitude"],r["longitude"]), axis=1
+        lambda r: haversine(v_lat,v_lon,r[lat_col_m],r[lon_col_m]), axis=1
     )
 
     nearest = mandi_data.loc[mandi_data["distance"].idxmin()]
@@ -118,52 +135,54 @@ if run:
         "Abroad Export": abroad_export
     }
 
+    margin_map = {
+        "Mandi":0,
+        "Processing":0.03,
+        "Pulp":0.04,
+        "Pickle":0.025,
+        "Local Export":0.05,
+        "Abroad Export":0.07
+    }
+
     for category, df in category_dfs.items():
 
         if variety not in variety_acceptance[category]:
             continue
 
-        if "latitude" not in df.columns:
+        lat_col, lon_col = detect_lat_lon(df)
+        name_col = detect_name(df)
+
+        if lat_col is None or lon_col is None:
             continue
 
         for _, row in df.iterrows():
 
-            if pd.notnull(row["latitude"]) and pd.notnull(row["longitude"]):
+            if pd.notnull(row[lat_col]) and pd.notnull(row[lon_col]):
 
                 dist = haversine(v_lat, v_lon,
-                                 row["latitude"],
-                                 row["longitude"])
+                                 row[lat_col],
+                                 row[lon_col])
 
+                # Transport: 1 Quintal per 10 km = 2000
                 transport = (dist/10) * 2000 * quantity_qtl
 
-                margin = {
-                    "Mandi":0,
-                    "Processing":0.03,
-                    "Pulp":0.04,
-                    "Pickle":0.025,
-                    "Local Export":0.05,
-                    "Abroad Export":0.07
-                }[category]
-
-                adjusted_price = base_price * (1+margin)
+                adjusted_price = base_price * (1+margin_map[category])
                 revenue = adjusted_price * 100 * quantity_qtl
                 net_profit = revenue - transport
-
-                name_col = [c for c in df.columns if "place" in c or "market" in c][0]
 
                 results.append({
                     "Category":category,
                     "Name":row[name_col],
                     "Distance_km":round(dist,2),
                     "Net Profit":round(net_profit,2),
-                    "Lat":row["latitude"],
-                    "Lon":row["longitude"]
+                    "Lat":row[lat_col],
+                    "Lon":row[lon_col]
                 })
 
     df_result = pd.DataFrame(results)
 
     if df_result.empty:
-        st.error("❌ No alternatives found. Check dataset lat/lon.")
+        st.error("❌ No alternatives found. Please check dataset lat/lon columns.")
         st.stop()
 
     df_top10 = df_result.sort_values("Net Profit", ascending=False).head(10)
@@ -184,13 +203,11 @@ if run:
 
     # ---------------- BAR CHART ----------------
     st.subheader("📊 Profit Comparison (Top 10)")
-
     fig = px.bar(df_top10,
                  x="Name",
                  y="Net Profit",
                  color="Category",
                  text="Net Profit")
-
     st.plotly_chart(fig, use_container_width=True)
 
     # ---------------- TABLE ----------------
@@ -199,7 +216,6 @@ if run:
 
     # ---------------- MAP ----------------
     st.subheader("🗺 Market Location Map")
-
     m = folium.Map(location=[v_lat,v_lon], zoom_start=9)
 
     folium.Marker([v_lat,v_lon],
@@ -215,7 +231,6 @@ if run:
 
     # ---------------- VARIETY LOGIC ----------------
     st.subheader("🧠 Variety Filtering Logic")
-
     for cat, vals in variety_acceptance.items():
         if variety in vals:
             st.success(f"✔ {cat} accepts {variety}")
