@@ -1,196 +1,180 @@
 # ==========================================================
 # 🥭 FARMER PROFIT INTELLIGENCE SYSTEM
-# Professional Dashboard Version
+# With Registration + Background Image
 # ==========================================================
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-import plotly.graph_objects as go
+import os
 
 st.set_page_config(layout="wide")
 
 # ==========================================================
-# PROFESSIONAL CSS STYLING
+# SET BACKGROUND IMAGE (YOUR UPLOADED IMAGE)
 # ==========================================================
 
-st.markdown("""
-<style>
-.big-title {
-    text-align:center;
-    font-size:40px;
-    font-weight:700;
-}
-.subtitle {
-    text-align:center;
-    font-size:18px;
-    color:gray;
-}
-.kpi-card {
-    background-color:#f8f9fa;
-    padding:20px;
-    border-radius:12px;
-    box-shadow:0 2px 6px rgba(0,0,0,0.1);
-    text-align:center;
-}
-.section-box {
-    background-color:white;
-    padding:20px;
-    border-radius:12px;
-    box-shadow:0 2px 8px rgba(0,0,0,0.1);
-}
-</style>
-""", unsafe_allow_html=True)
+def set_bg():
+    st.markdown(
+        f"""
+        <style>
+        .stApp {{
+            background-image: url("mango_bg.jpg");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }}
+        .overlay {{
+            background-color: rgba(0,0,0,0.75);
+            padding: 20px;
+            border-radius: 15px;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+set_bg()
 
 # ==========================================================
-# HEADER
+# FARMER DATABASE
 # ==========================================================
 
-st.markdown('<div class="big-title">🥭 Farmer Profit Intelligence System</div>', unsafe_allow_html=True)
-st.markdown('<div class="subtitle">Smart Mango Marketing Decision Engine</div>', unsafe_allow_html=True)
+FARMER_DB = "farmers_database.csv"
 
-st.image(
-    "https://images.unsplash.com/photo-1598514982886-87a5eecb1c0c",
-    use_container_width=True
+if not os.path.exists(FARMER_DB):
+    pd.DataFrame(columns=["Name", "Mobile", "Village", "District"]).to_csv(FARMER_DB, index=False)
+
+if "registered" not in st.session_state:
+    st.session_state.registered = False
+
+# ==========================================================
+# REGISTRATION
+# ==========================================================
+
+st.sidebar.title("👨‍🌾 Farmer Registration")
+
+name = st.sidebar.text_input("Farmer Name")
+mobile = st.sidebar.text_input("Mobile Number")
+village_reg = st.sidebar.text_input("Village")
+district = st.sidebar.text_input("District")
+
+if st.sidebar.button("Register Farmer"):
+
+    if name and mobile and village_reg and district:
+
+        new_farmer = pd.DataFrame([[name, mobile, village_reg, district]],
+                                  columns=["Name", "Mobile", "Village", "District"])
+
+        new_farmer.to_csv(FARMER_DB, mode="a", header=False, index=False)
+
+        st.session_state.registered = True
+        st.session_state.farmer = {
+            "Name": name,
+            "Mobile": mobile,
+            "Village": village_reg,
+            "District": district
+        }
+
+        st.sidebar.success("✅ Registration Successful!")
+
+    else:
+        st.sidebar.error("⚠ Fill all details")
+
+# Stop dashboard if not registered
+if not st.session_state.registered:
+    st.title("🔒 Please Register to Access Dashboard")
+    st.stop()
+
+farmer = st.session_state.farmer
+
+# ==========================================================
+# HEADER SECTION
+# ==========================================================
+
+st.markdown(
+    f"""
+    <div class="overlay">
+        <h1 style="text-align:center; color:white;">🥭 Farmer Profit Intelligence System</h1>
+        <h4 style="text-align:center; color:lightgreen;">
+            Welcome {farmer['Name']}
+        </h4>
+    </div>
+    """,
+    unsafe_allow_html=True
 )
 
 # ==========================================================
-# LOAD DATA (FAST CACHE)
+# FARMER DETAILS SECTION
 # ==========================================================
 
-@st.cache_data(show_spinner=False)
+st.markdown(
+    f"""
+    <div class="overlay">
+        <h3 style="color:white;">👨‍🌾 Farmer Details</h3>
+        <p style="color:white;">
+        <b>Name:</b> {farmer['Name']} <br>
+        <b>Mobile:</b> {farmer['Mobile']} <br>
+        <b>Village:</b> {farmer['Village']} <br>
+        <b>District:</b> {farmer['District']}
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
+# ==========================================================
+# LOAD MARKET DATA
+# ==========================================================
+
+@st.cache_data
 def load_data():
     df = pd.read_csv("cleaned_price_data.csv")
     df["today_price(rs/kg)"] = pd.to_numeric(df["today_price(rs/kg)"], errors="coerce").fillna(0)
-    df["yesterday_price(rs/kg)"] = pd.to_numeric(df["yesterday_price(rs/kg)"], errors="coerce").fillna(0)
     return df
 
 df = load_data()
 
 # ==========================================================
-# SIDEBAR
+# ANALYSIS PANEL
 # ==========================================================
 
-st.sidebar.title("📊 Analysis Control Panel")
+st.sidebar.title("📊 Market Analysis")
 
-village = st.sidebar.text_input("Enter Village Name", "Ramapuram")
-variety = st.sidebar.selectbox("Select Mango Variety", ["Banganapalli", "Totapuri"])
 TONNES = st.sidebar.number_input("Enter Quantity (Tonnes)", min_value=1, value=10)
 
-run = st.sidebar.button("Run Smart Analysis")
+if st.sidebar.button("Run Smart Analysis"):
 
-# ==========================================================
-# MAIN ANALYSIS
-# ==========================================================
-
-if run:
-
-    df["BasePrice"] = df["today_price(rs/kg)"]
-    df["TotalRevenue"] = df["BasePrice"] * TONNES * 1000
-
-    # Dummy distance calculation (can replace with haversine later)
-    df["Distance"] = np.random.uniform(20, 30, len(df))
-
-    df["TransportCost"] = df["Distance"] * 10
-    df["NetProfit"] = df["TotalRevenue"] - df["TransportCost"] * 1000
+    df["Revenue"] = df["today_price(rs/kg)"] * TONNES * 1000
+    df["TransportCost"] = 8000
+    df["NetProfit"] = df["Revenue"] - df["TransportCost"]
 
     top10 = df.sort_values("NetProfit", ascending=False).head(10)
     best = top10.iloc[0]
 
-    # ======================================================
-    # KPI ROW
-    # ======================================================
+    st.markdown('<div class="overlay">', unsafe_allow_html=True)
 
     col1, col2, col3, col4 = st.columns(4)
 
-    col1.markdown(f"""
-    <div class="kpi-card">
-        <h4>Base Price (₹/kg)</h4>
-        <h2>{round(best['BasePrice'],2)}</h2>
-    </div>
-    """, unsafe_allow_html=True)
+    col1.metric("Base Price (₹/kg)", best["today_price(rs/kg)"])
+    col2.metric("Total Revenue (₹)", f"{int(best['Revenue']):,}")
+    col3.metric("Best Market", best["market"])
+    col4.metric("Best Profit (₹)", f"{int(best['NetProfit']):,}")
 
-    col2.markdown(f"""
-    <div class="kpi-card">
-        <h4>Total Revenue (₹)</h4>
-        <h2>{int(best['TotalRevenue']):,}</h2>
-    </div>
-    """, unsafe_allow_html=True)
+    st.markdown("### 📈 Profit Comparison")
 
-    col3.markdown(f"""
-    <div class="kpi-card">
-        <h4>Best Market</h4>
-        <h2>{best['market']}</h2>
-    </div>
-    """, unsafe_allow_html=True)
-
-    col4.markdown(f"""
-    <div class="kpi-card">
-        <h4>Best Profit (₹)</h4>
-        <h2 style="color:green;">{int(best['NetProfit']):,}</h2>
-    </div>
-    """, unsafe_allow_html=True)
-
-    # ======================================================
-    # PROFIT CHART
-    # ======================================================
-
-    st.markdown("## 📈 Profit Comparison")
-
-    fig = px.bar(
-        top10,
-        x="market",
-        y="NetProfit",
-        color="NetProfit",
-        color_continuous_scale="Greens",
-        text_auto=True
-    )
-
-    fig.update_layout(
-        template="plotly_white",
-        xaxis_title="Market",
-        yaxis_title="Net Profit (₹)"
-    )
+    fig = px.bar(top10,
+                 x="market",
+                 y="NetProfit",
+                 color="NetProfit",
+                 color_continuous_scale="greens")
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # ======================================================
-    # TOP 10 TABLE
-    # ======================================================
+    st.markdown("### 📋 Top 10 Markets")
 
-    st.markdown("## 📋 Top 10 Closest Markets")
+    st.dataframe(top10[["market", "NetProfit"]], use_container_width=True)
 
-    table = top10[["market", "Distance", "NetProfit"]].copy()
-    table = table.rename(columns={
-        "market": "Market",
-        "Distance": "Distance (km)",
-        "NetProfit": "Net Profit (₹)"
-    })
+    st.markdown("</div>", unsafe_allow_html=True)
 
-    st.dataframe(table, use_container_width=True)
-
-    # ======================================================
-    # MAP (FAST PLOTLY MAP)
-    # ======================================================
-
-    st.markdown("## 🗺 Market Location Map")
-
-    if "lat" in df.columns and "long" in df.columns:
-
-        map_fig = px.scatter_mapbox(
-            top10,
-            lat="lat",
-            lon="long",
-            hover_name="market",
-            hover_data=["NetProfit"],
-            zoom=8,
-            height=500
-        )
-
-        map_fig.update_layout(
-            mapbox_style="open-street-map",
-            margin={"r":0,"t":0,"l":0,"b":0}
-        )
-
-        st.plotly_chart(map_fig, use_container_width=True)
