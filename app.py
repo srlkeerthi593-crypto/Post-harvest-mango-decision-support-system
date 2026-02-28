@@ -9,6 +9,7 @@ import numpy as np
 import folium
 from streamlit_folium import st_folium
 import plotly.graph_objects as go
+import plotly.express as px
 
 st.set_page_config(layout="wide")
 
@@ -44,13 +45,11 @@ def detect_lat_lon(df):
     return lat, lon
 
 def detect_name(df):
-    # This ensures real names are picked directly from CSV
-    for c in df.columns:
-        if c in ["market","place","unit_name","company_name","name"]:
-            return c
-    for c in df.columns:
-        if any(x in c for x in ["place","market","name"]):
-            return c
+    # Strict real name usage from CSV
+    priority_cols = ["market", "unit_name", "company_name", "place", "name"]
+    for col in priority_cols:
+        if col in df.columns:
+            return col
     return df.columns[0]
 
 def haversine(lat1, lon1, lat2, lon2):
@@ -107,7 +106,6 @@ margin_map = {
 if st.session_state.run:
 
     st.markdown(f"## 🙏🥭 Namaste **{farmer_name}** 🥭")
-    st.markdown("### 📈 Strategic Profit Intelligence Summary 🥭")
 
     village_row = villages[villages[detect_name(villages)]==selected_village].iloc[0]
     v_lat, v_lon = village_row[detect_lat_lon(villages)[0]], village_row[detect_lat_lon(villages)[1]]
@@ -136,64 +134,79 @@ if st.session_state.run:
     for cat,df in category_dfs.items():
         if variety not in variety_acceptance[cat]: continue
         lat,lon = detect_lat_lon(df)
-        name_col = detect_name(df)   # ensures real CSV names used
+        name_col = detect_name(df)
         if lat is None: continue
 
         for _,row in df.iterrows():
             if pd.notnull(row[lat]) and pd.notnull(row[lon]):
+
                 dist = haversine(v_lat,v_lon,row[lat],row[lon])
-                transport = (dist/10)*2000*quantity_qtl
+                transport = dist * 12 * quantity_qtl
                 revenue = base_price*(1+margin_map[cat])*100*quantity_qtl
                 net = revenue - transport
 
                 results.append({
                     "Category":cat,
-                    "Name":row[name_col],   # real names
+                    "Name":row[name_col],  # REAL CSV NAMES
                     "Distance_km":round(dist,2),
+                    "Revenue":round(revenue,2),
+                    "Transport Cost":round(transport,2),
                     "Net Profit":round(net,2),
                     "Lat":row[lat],
                     "Lon":row[lon]
                 })
 
-    df_top10 = pd.DataFrame(results).drop_duplicates(subset=["Name","Category"])\
-        .sort_values("Net Profit",ascending=False).head(10).reset_index(drop=True)
+    df_top10 = pd.DataFrame(results).drop_duplicates(
+        subset=["Name","Category"]
+    ).sort_values("Net Profit",ascending=False).head(10).reset_index(drop=True)
 
-    df_top10["Rank"] = df_top10.index + 1
-    best = df_top10.iloc[0]
-
-    # ---------------- METRICS ----------------
-    c1,c2,c3,c4 = st.columns(4)
-    c1.metric("💰 Base Price (₹/kg)",round(base_price,2))
-    c2.metric("🥇 Best Alternative 🥭",best["Name"])
-    c3.metric("🏆 Net Profit (₹)",best["Net Profit"])
-    c4.metric("📦 Quantity (Qtl)",quantity_qtl)
-
-    st.markdown("---")
-
-    st.success(f"📢🥭 Recommendation: Sell at **{best['Name']}** under "
-               f"**{best['Category']}** for maximum estimated profit of ₹ {best['Net Profit']:,.0f} 🥭")
+    df_top10["Rank"]=df_top10.index+1
+    best=df_top10.iloc[0]
 
     # ---------------- BAR GRAPH ----------------
-    st.subheader("📊🥭 Profit Comparison (Top 10 Alternatives)")
-
-    df_sorted = df_top10.sort_values("Net Profit")
+    st.subheader("📊🥭 Profit Comparison")
 
     fig = go.Figure()
     fig.add_trace(go.Bar(
-        y=df_sorted["Name"],
-        x=df_sorted["Net Profit"],
+        y=df_top10["Name"],
+        x=df_top10["Net Profit"],
         orientation='h',
-        text=[f"₹{x:,.0f}" for x in df_sorted["Net Profit"]],
+        text=[f"₹{x:,.0f}" for x in df_top10["Net Profit"]],
         textposition="outside",
         marker=dict(
-            color=df_sorted["Net Profit"],
+            color=df_top10["Net Profit"],
             colorscale="Turbo",
             line=dict(color="black", width=1.5)
         )
     ))
 
-    fig.update_layout(height=750, yaxis=dict(autorange="reversed"))
+    fig.update_layout(height=700, yaxis=dict(autorange="reversed"))
     st.plotly_chart(fig, width="stretch")
+
+    # ---------------- PIE CHART ----------------
+    st.subheader("🥭 Category-wise Profit Distribution")
+
+    pie_data = df_top10.groupby("Category")["Net Profit"].sum().reset_index()
+
+    pie_fig = px.pie(
+        pie_data,
+        names="Category",
+        values="Net Profit",
+        hole=0.4,
+        color_discrete_sequence=px.colors.sequential.Turbo
+    )
+
+    pie_fig.update_traces(textinfo="percent+label")
+    st.plotly_chart(pie_fig, width="stretch")
+
+    # ---------------- COMPARISON TABLE ----------------
+    st.subheader("📋🥭 Detailed Comparison Table")
+
+    st.dataframe(df_top10[[
+        "Rank","Name","Category",
+        "Distance_km","Revenue",
+        "Transport Cost","Net Profit"
+    ]])
 
     # ---------------- MAP ----------------
     st.subheader("🗺🥭 Top 10 Alternatives with Routes")
@@ -201,11 +214,10 @@ if st.session_state.run:
     m = folium.Map(location=[v_lat,v_lon],zoom_start=9)
 
     folium.Marker([v_lat,v_lon],
-                  popup="🏡 Village 🥭",
+                  popup="🏡 Village",
                   icon=folium.Icon(color="black")).add_to(m)
 
     for _,row in df_top10.iterrows():
-
         folium.Marker(
             [row["Lat"],row["Lon"]],
             popup=f"🥭 {row['Name']} ({row['Category']})",
@@ -215,8 +227,7 @@ if st.session_state.run:
         folium.PolyLine(
             [[v_lat,v_lon],[row["Lat"],row["Lon"]]],
             color="orange",
-            weight=4,
-            opacity=0.8
+            weight=4
         ).add_to(m)
 
     st_folium(m,width=1100,height=600)
