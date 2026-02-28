@@ -1,6 +1,6 @@
 # ============================================================
 # 🥭 FARMER PROFIT INTELLIGENCE SYSTEM
-# 🚀 PHD-LEVEL PREMIUM VERSION
+# 🧠 AI PREDICTION MODE ACTIVATED
 # ============================================================
 
 import streamlit as st
@@ -9,13 +9,13 @@ import numpy as np
 import folium
 import requests
 from streamlit_folium import st_folium
-import plotly.graph_objects as go
 import plotly.express as px
+from sklearn.preprocessing import MinMaxScaler
 
 st.set_page_config(layout="wide")
 
 st.title("🥭 Mango Profit Intelligence System")
-st.subheader("🚜 Advanced Smart Marketing Decision Engine")
+st.subheader("🧠 AI-Powered Smart Decision Engine")
 
 # ---------------- LOAD DATA ----------------
 @st.cache_data
@@ -59,16 +59,13 @@ def haversine(lat1, lon1, lat2, lon2):
     a = np.sin(dlat/2)**2 + np.cos(lat1)*np.cos(lat2)*np.sin(dlon/2)**2
     return R * 2*np.arcsin(np.sqrt(a))
 
-# Real Road Distance using OSRM
 def road_distance(lat1, lon1, lat2, lon2):
     try:
-        url = f"http://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}?overview=full&geometries=geojson"
-        response = requests.get(url, timeout=5).json()
-        distance_km = response["routes"][0]["distance"] / 1000
-        geometry = response["routes"][0]["geometry"]
-        return distance_km, geometry
+        url = f"http://router.project-osrm.org/route/v1/driving/{lon1},{lat1};{lon2},{lat2}?overview=false"
+        r = requests.get(url, timeout=5).json()
+        return r["routes"][0]["distance"] / 1000
     except:
-        return haversine(lat1, lon1, lat2, lon2), None
+        return haversine(lat1, lon1, lat2, lon2)
 
 # ---------------- SIDEBAR ----------------
 st.sidebar.header("👨‍🌾 Farmer Details")
@@ -91,36 +88,10 @@ variety = st.sidebar.selectbox(
 
 quantity_qtl = st.sidebar.number_input("Quantity (Quintals)", min_value=1, value=10)
 
-if "run" not in st.session_state:
-    st.session_state.run = False
-
-if st.sidebar.button("🚀 Run Premium Analysis"):
-    st.session_state.run = True
-
-# ---------------- VARIETY RULES ----------------
-variety_acceptance = {
-    "Mandi":["Banganapalli","Totapuri","Neelam","Rasalu"],
-    "Processing":["Totapuri","Neelam"],
-    "Pulp":["Totapuri"],
-    "Pickle":["Totapuri","Rasalu"],
-    "Local Export":["Banganapalli"],
-    "Abroad Export":["Banganapalli"]
-}
-
-margin_map = {
-    "Mandi":0,
-    "Processing":0.03,
-    "Pulp":0.04,
-    "Pickle":0.025,
-    "Local Export":0.05,
-    "Abroad Export":0.07
-}
-
-# ---------------- MAIN ----------------
-if st.session_state.run:
+if st.sidebar.button("🚀 Run AI Analysis"):
 
     st.markdown(f"## 🙏🥭 Namaste **{farmer_name}**")
-    st.markdown("### 📊 Advanced Profit Intelligence Dashboard")
+    st.markdown("### 🤖 AI Smart Profit Dashboard Activated")
 
     village_row = villages[villages[village_name_col]==selected_village].iloc[0]
     v_lat = village_row[v_lat_col]
@@ -134,10 +105,24 @@ if st.session_state.run:
         lambda r: haversine(v_lat,v_lon,r[lat_m],r[lon_m]),axis=1)
 
     nearest = mandi_data.loc[mandi_data["distance"].idxmin()]
-    base_price = nearest["today_price(rs/kg)"]
 
-    results=[]
-    routes_dict={}
+    today_price = nearest["today_price(rs/kg)"]
+    yesterday_price = nearest["yesterday_price(rs/kg)"]
+
+    # --------- AI PRICE PREDICTION ----------
+    trend = today_price - yesterday_price
+    predicted_price = today_price + (0.6 * trend)
+
+    st.metric("📈 AI Predicted Tomorrow Price (₹/kg)", round(predicted_price,2))
+
+    margin_map = {
+        "Mandi":0,
+        "Processing":0.03,
+        "Pulp":0.04,
+        "Pickle":0.025,
+        "Local Export":0.05,
+        "Abroad Export":0.07
+    }
 
     category_dfs = {
         "Mandi":mandi_data,
@@ -148,10 +133,9 @@ if st.session_state.run:
         "Abroad Export":abroad_export
     }
 
-    for cat,df in category_dfs.items():
+    results=[]
 
-        if variety not in variety_acceptance[cat]:
-            continue
+    for cat,df in category_dfs.items():
 
         lat,lon = detect_lat_lon(df)
         name_col = "market" if cat=="Mandi" else detect_name(df)
@@ -159,13 +143,16 @@ if st.session_state.run:
         if lat is None: continue
 
         for _,row in df.iterrows():
-            if pd.notnull(row[lat]) and pd.notnull(row[lon]):
+            if pd.notnull(row[lat]):
 
-                dist, geometry = road_distance(v_lat,v_lon,row[lat],row[lon])
-
+                dist = road_distance(v_lat,v_lon,row[lat],row[lon])
                 transport = (dist/10)*2000*quantity_qtl
-                revenue = base_price*(1+margin_map[cat])*100*quantity_qtl
-                net = revenue - transport
+
+                spoilage = 0.005*(dist/10)
+                revenue = predicted_price*(1+margin_map[cat])*100*quantity_qtl
+                revenue_after_spoil = revenue*(1-spoilage)
+
+                net = revenue_after_spoil - transport
 
                 results.append({
                     "Category":cat,
@@ -173,87 +160,57 @@ if st.session_state.run:
                     "Distance_km":round(dist,2),
                     "Transport Cost":round(transport,2),
                     "Net Profit":round(net,2),
-                    "Profit per KM":round(net/dist if dist>0 else 0,2),
-                    "Lat":row[lat],
-                    "Lon":row[lon]
+                    "Spoilage %":round(spoilage*100,2)
                 })
 
-                routes_dict[row[name_col]] = geometry
-
-    df_top10 = pd.DataFrame(results).sort_values(
+    df_ai = pd.DataFrame(results).sort_values(
         "Net Profit",ascending=False).head(10).reset_index(drop=True)
 
-    df_top10["Rank"]=df_top10.index+1
-    best=df_top10.iloc[0]
+    # --------- AI SMART SCORE ----------
+    scaler = MinMaxScaler()
 
-    # ---------------- METRICS ----------------
-    c1,c2,c3,c4 = st.columns(4)
-    c1.metric("💰 Base Price (₹/kg)",round(base_price,2))
-    c2.metric("🥇 Best Option",best["Name"])
-    c3.metric("🏆 Net Profit (₹)",best["Net Profit"])
-    c4.metric("📦 Quantity (Qtl)",quantity_qtl)
+    df_ai["Profit_N"] = scaler.fit_transform(df_ai[["Net Profit"]])
+    df_ai["Distance_N"] = 1 - scaler.fit_transform(df_ai[["Distance_km"]])
+    df_ai["Transport_N"] = 1 - scaler.fit_transform(df_ai[["Transport Cost"]])
 
-    st.markdown("---")
+    df_ai["AI Score"] = (
+        0.4*df_ai["Profit_N"] +
+        0.3*df_ai["Distance_N"] +
+        0.3*df_ai["Transport_N"]
+    )
 
-    # ---------------- BAR GRAPH ----------------
-    st.subheader("📊 Profit Comparison")
+    df_ai = df_ai.sort_values("AI Score",ascending=False)
+    df_ai["Rank"]=range(1,len(df_ai)+1)
 
-    fig = px.bar(df_top10.sort_values("Net Profit"),
-                 x="Net Profit",
+    best=df_ai.iloc[0]
+
+    st.success(f"🏆 AI Recommendation: {best['Name']}")
+
+    # --------- CHART ----------
+    fig = px.bar(df_ai,
+                 x="AI Score",
                  y="Name",
                  color="Category",
                  orientation="h",
-                 text="Net Profit")
+                 text="AI Score")
 
-    fig.update_layout(height=750)
-    fig.update_traces(textposition="outside")
     st.plotly_chart(fig,width="stretch")
 
-    # ---------------- SCATTER ANALYSIS ----------------
-    st.subheader("📈 Distance vs Profit Analysis")
+    # --------- TABLE ----------
+    st.dataframe(df_ai)
 
-    scatter = px.scatter(df_top10,
-                         x="Distance_km",
-                         y="Net Profit",
-                         size="Transport Cost",
-                         color="Category",
-                         hover_name="Name")
-
-    st.plotly_chart(scatter,width="stretch")
-
-    # ---------------- MAP WITH REAL ROUTES ----------------
-    st.subheader("🗺 Real Road Routes to Top 10")
-
+    # --------- MAP ----------
     m = folium.Map(location=[v_lat,v_lon],zoom_start=9)
 
     folium.Marker([v_lat,v_lon],
-                  popup="🏡 Village",
+                  popup="Village",
                   icon=folium.Icon(color="black")).add_to(m)
 
-    for _,row in df_top10.iterrows():
-
+    for _,row in df_ai.iterrows():
         folium.Marker(
-            [row["Lat"],row["Lon"]],
-            popup=f"🥭 Rank {row['Rank']} - {row['Name']}",
+            [row["Distance_km"]*0+v_lat,row["Distance_km"]*0+v_lon],
+            popup=row["Name"],
             icon=folium.Icon(color="green")
-        ).add_to(m)
+        )
 
-        geometry = routes_dict.get(row["Name"])
-        if geometry:
-            folium.GeoJson(geometry,
-                           style_function=lambda x: {"color":"orange","weight":4}).add_to(m)
-
-    st_folium(m,width=1100,height=650)
-
-    # ---------------- TABLE ----------------
-    st.subheader("📋 Detailed Comparison Table")
-    st.dataframe(df_top10)
-
-    # ---------------- VARIETY LOGIC ----------------
-    st.subheader("🧠 Variety Acceptance Logic")
-
-    for cat,vals in variety_acceptance.items():
-        if variety in vals:
-            st.success(f"✔ {cat} accepts {variety}")
-        else:
-            st.error(f"✘ {cat} does NOT accept {variety}")
+    st_folium(m,width=1100,height=600)
