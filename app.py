@@ -1,55 +1,48 @@
 # ==========================================================
 # 🥭 FARMER PROFIT INTELLIGENCE SYSTEM
-# Mango Background + Registration + Variety Logic
-# Uses REAL CSV Names (No Renaming)
+# Professional Mango Decision Dashboard
 # ==========================================================
 
 import streamlit as st
 import pandas as pd
-import numpy as np
-import base64
 import os
 
-st.set_page_config(layout="wide")
+st.set_page_config(page_title="Farmer Profit Intelligence System", layout="wide")
 
 # ==========================================================
-# BACKGROUND IMAGE (Your Mango Trees Image)
-# Make sure mango_bg.jpg is in same folder as app.py
+# 🔥 MANGO BACKGROUND (Cloud Safe - No File Error)
 # ==========================================================
 
-def set_bg(image_file):
-    with open(image_file, "rb") as f:
-        data = f.read()
-    encoded = base64.b64encode(data).decode()
+BACKGROUND_IMAGE_URL = "PASTE_YOUR_RAW_GITHUB_IMAGE_URL_HERE"
 
-    st.markdown(
-        f"""
-        <style>
-        .stApp {{
-            background-image: url("data:image/jpg;base64,{encoded}");
-            background-size: cover;
-            background-position: center;
-            background-attachment: fixed;
-        }}
+st.markdown(f"""
+<style>
+.stApp {{
+    background-image: url("{BACKGROUND_IMAGE_URL}");
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
+}}
 
-        .overlay {{
-            background-color: rgba(0,0,0,0.75);
-            padding: 25px;
-            border-radius: 15px;
-        }}
+.overlay {{
+    background-color: rgba(0, 0, 0, 0.80);
+    padding: 30px;
+    border-radius: 15px;
+}}
 
-        h1,h2,h3,h4,h5,p,label {{
-            color: white !important;
-        }}
-        </style>
-        """,
-        unsafe_allow_html=True
-    )
+h1, h2, h3, h4, h5, p, label {{
+    color: white !important;
+}}
 
-set_bg("mango_bg.jpg")
+[data-testid="stMetricValue"] {{
+    color: #00FF7F !important;
+    font-weight: bold;
+}}
+</style>
+""", unsafe_allow_html=True)
 
 # ==========================================================
-# FARMER DATABASE
+# 📁 FARMER DATABASE
 # ==========================================================
 
 FARMER_DB = "farmers_database.csv"
@@ -61,7 +54,7 @@ if "registered" not in st.session_state:
     st.session_state.registered = False
 
 # ==========================================================
-# SIDEBAR REGISTRATION
+# 👨‍🌾 SIDEBAR REGISTRATION
 # ==========================================================
 
 st.sidebar.title("👨‍🌾 Farmer Registration")
@@ -76,7 +69,6 @@ if st.sidebar.button("Register Farmer"):
 
         new_farmer = pd.DataFrame([[name,mobile,village]],
                                   columns=["Name","Mobile","Village"])
-
         new_farmer.to_csv(FARMER_DB, mode="a", header=False, index=False)
 
         st.session_state.registered = True
@@ -89,7 +81,7 @@ if st.sidebar.button("Register Farmer"):
         st.sidebar.success("Registration Successful")
 
     else:
-        st.sidebar.error("Please fill all details")
+        st.sidebar.error("Fill all details")
 
 if not st.session_state.registered:
     st.title("🔒 Please Register to Access Dashboard")
@@ -98,24 +90,21 @@ if not st.session_state.registered:
 farmer = st.session_state.farmer
 
 # ==========================================================
-# HEADER
+# 🥭 HEADER
 # ==========================================================
 
-st.markdown(
-    f"""
-    <div class="overlay">
-    <h1 style="text-align:center;">🥭 Farmer Profit Intelligence System</h1>
-    <h4 style="text-align:center;">Welcome {farmer['Name']}</h4>
-    <p style="text-align:center;">
-        Village: {farmer['Village']} | Mobile: {farmer['Mobile']}
-    </p>
-    </div>
-    """,
-    unsafe_allow_html=True
-)
+st.markdown(f"""
+<div class="overlay">
+<h1 style="text-align:center;">🥭 Farmer Profit Intelligence System</h1>
+<h4 style="text-align:center;">Smart Mango Marketing Decision Engine</h4>
+<p style="text-align:center;">
+Farmer: {farmer['Name']} | Village: {farmer['Village']} | Mobile: {farmer['Mobile']}
+</p>
+</div>
+""", unsafe_allow_html=True)
 
 # ==========================================================
-# LOAD YOUR CSV DATA (REAL DATA)
+# 📊 LOAD REAL CSV DATA
 # ==========================================================
 
 @st.cache_data
@@ -128,7 +117,7 @@ def load_data():
 df = load_data()
 
 # ==========================================================
-# VARIETY ACCEPTANCE LOGIC (FROM YOUR COLAB CODE)
+# 🧠 VARIETY LOGIC (Your Original Logic)
 # ==========================================================
 
 variety_acceptance = {
@@ -141,7 +130,7 @@ variety_acceptance = {
 }
 
 # ==========================================================
-# ANALYSIS SECTION
+# 📈 MARKET ANALYSIS
 # ==========================================================
 
 st.sidebar.title("📊 Market Analysis")
@@ -155,21 +144,19 @@ TONNES = st.sidebar.number_input("Enter Quantity (Tonnes)", 1, 100, 10)
 
 if st.sidebar.button("Run Smart Analysis"):
 
-    # Step 1: Determine allowed categories
     allowed_categories = []
 
     for category, varieties in variety_acceptance.items():
         if variety in varieties:
             allowed_categories.append(category)
 
-    # Step 2: Filter using revenue_type column from YOUR CSV
     filtered_df = df[df["revenue_type"].isin(allowed_categories)]
 
     if filtered_df.empty:
-        st.error("No suitable markets available for selected variety.")
+        st.error("No suitable alternatives for selected variety.")
         st.stop()
 
-    # Step 3: Profit Calculation
+    # Profit Calculation
     filtered_df["Revenue"] = filtered_df["today_price(rs/kg)"] * TONNES * 1000
     filtered_df["TransportCost"] = 8000
     filtered_df["NetProfit"] = filtered_df["Revenue"] - filtered_df["TransportCost"]
@@ -180,7 +167,6 @@ if st.sidebar.button("Run Smart Analysis"):
 
     st.markdown('<div class="overlay">', unsafe_allow_html=True)
 
-    # KPI Cards
     col1,col2,col3,col4 = st.columns(4)
 
     col1.metric("Selected Variety", variety)
@@ -188,9 +174,8 @@ if st.sidebar.button("Run Smart Analysis"):
     col3.metric("Base Price (₹/kg)", best["today_price(rs/kg)"])
     col4.metric("Best Profit (₹)", f"{int(best['NetProfit']):,}")
 
-    st.markdown("### ✅ Suitable Alternatives (Based on Variety Logic)")
+    st.markdown("### ✅ Suitable Alternatives (From Your CSV)")
 
-    # IMPORTANT: Using EXACT names from CSV
     st.dataframe(
         top10[["market","revenue_type","today_price(rs/kg)","NetProfit"]],
         use_container_width=True
