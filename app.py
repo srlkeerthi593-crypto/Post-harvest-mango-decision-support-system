@@ -13,10 +13,10 @@ st.set_page_config(page_title="Farmer Decision Support System", layout="wide")
 st.markdown("""
 <style>
 [data-testid="stAppViewContainer"] {
-    background-color: #f4f9f4;
+    background-color: #f5f9f4;
 }
 h1, h2, h3 {
-    font-weight: 800 !important;
+    font-weight: 900 !important;
 }
 .stMetric label {
     font-weight: bold !important;
@@ -30,24 +30,30 @@ st.markdown("### 🚀 Smart Mango Marketing Decision Engine")
 # ============================================================
 # 📂 LOAD DATA
 # ============================================================
-villages = pd.read_csv("Village data.csv")
-prices = pd.read_csv("cleaned_price_data.csv")
-geo = pd.read_csv("cleaned_geo_locations.csv")
-processing = pd.read_csv("cleaned_processing_facilities.csv")
-pulp = pd.read_csv("Pulp_units_merged_lat_long.csv")
-pickle_units = pd.read_csv("cleaned_pickle_units.csv")
-local_export = pd.read_csv("cleaned_local_export.csv")
-abroad_export = pd.read_csv("cleaned_abroad_export.csv")
+@st.cache_data
+def load_data():
+    villages = pd.read_csv("Village data.csv")
+    prices = pd.read_csv("cleaned_price_data.csv")
+    geo = pd.read_csv("cleaned_geo_locations.csv")
+    processing = pd.read_csv("cleaned_processing_facilities.csv")
+    pulp = pd.read_csv("Pulp_units_merged_lat_long.csv")
+    pickle_units = pd.read_csv("cleaned_pickle_units.csv")
+    local_export = pd.read_csv("cleaned_local_export.csv")
+    abroad_export = pd.read_csv("cleaned_abroad_export.csv")
 
-for df in [villages, prices, geo, processing,
-           pulp, pickle_units, local_export, abroad_export]:
-    df.columns = df.columns.str.strip().str.lower()
+    for df in [villages, prices, geo, processing,
+               pulp, pickle_units, local_export, abroad_export]:
+        df.columns = df.columns.str.strip().str.lower()
+
+    return villages, prices, geo, processing, pulp, pickle_units, local_export, abroad_export
+
+villages, prices, geo, processing, pulp, pickle_units, local_export, abroad_export = load_data()
 
 # ============================================================
 # ⚙ CONFIG
 # ============================================================
 RADIUS_KM = 80
-TRANSPORT_RATE = 2000   # per 10km per tonne
+TRANSPORT_RATE = 2000
 SPOILAGE_PER_10KM = 0.004
 HANDLING_RISK = 0.002
 
@@ -63,7 +69,7 @@ village_col = [c for c in villages.columns if "village" in c][0]
 village_name = st.sidebar.selectbox("🏡 Select Village",
                                     villages[village_col].dropna().unique())
 
-variety = st.sidebar.selectbox("🥭 Select Mango Variety",
+variety = st.sidebar.selectbox("🥭 Mango Variety",
                                ["Banganapalli","Totapuri","Neelam","Rasalu"])
 
 quantity = st.sidebar.number_input("📦 Quantity (Tonnes)", min_value=1)
@@ -80,6 +86,12 @@ def haversine(lat1, lon1, lat2, lon2):
     dlon = lon2 - lon1
     a = np.sin(dlat/2)**2 + np.cos(lat1)*np.cos(lat2)*np.sin(dlon/2)**2
     return R * 2*np.arcsin(np.sqrt(a))
+
+def detect_cols(df):
+    name = [c for c in df.columns if any(x in c for x in ["name","market","firm","facility","hub","place"])]
+    lat = [c for c in df.columns if "lat" in c]
+    lon = [c for c in df.columns if "lon" in c]
+    return name[0], lat[0], lon[0]
 
 # ============================================================
 # 🚀 RUN LOGIC
@@ -103,11 +115,12 @@ if run:
     }
 
     st.subheader("🔎 Variety Filtering Logic")
+
     for cat, vals in variety_acceptance.items():
         if variety in vals:
             st.success(f"✔ {cat} ACCEPTS {variety}")
         else:
-            st.error(f"✘ {cat} NOT suitable")
+            st.error(f"✘ {cat} NOT Suitable")
 
     # ========================================================
     # 📈 BASE PRICE
@@ -121,14 +134,12 @@ if run:
     nearest = mandi_data.loc[mandi_data["distance"].idxmin()]
     base_price = nearest["today_price(rs/kg)"]
 
-    st.info(f"📌 Nearest Market: **{nearest['market']}**")
+    st.info(f"📍 Nearest Market: **{nearest['market']}**")
     st.info(f"💰 Base Price: ₹ {base_price} / kg")
 
     # ========================================================
-    # 📦 COLLECT ALTERNATIVES
+    # 📦 COLLECT OPTIONS
     # ========================================================
-    all_options = []
-
     datasets = {
         "Mandi": mandi_data,
         "Processing": processing,
@@ -138,34 +149,61 @@ if run:
         "Abroad Export": abroad_export
     }
 
+    category_params = {
+        "Mandi": {"margin":0, "color":"blue"},
+        "Processing": {"margin":0.03, "color":"orange"},
+        "Pulp": {"margin":0.04, "color":"purple"},
+        "Pickle": {"margin":0.025, "color":"cadetblue"},
+        "Local Export": {"margin":0.05, "color":"darkgreen"},
+        "Abroad Export": {"margin":0.07, "color":"red"},
+    }
+
+    results = []
+
     for cat, df in datasets.items():
         if variety not in variety_acceptance[cat]:
             continue
 
-        name_col = [c for c in df.columns if any(x in c for x in ["name","market","firm","facility"])][0]
-        lat_col = [c for c in df.columns if "lat" in c][0]
-        lon_col = [c for c in df.columns if "lon" in c][0]
+        name_col, lat_col, lon_col = detect_cols(df)
 
         for _, row in df.iterrows():
             if pd.notnull(row[lat_col]) and pd.notnull(row[lon_col]):
-                km = haversine(v_lat,v_lon,row[lat_col],row[lon_col])
-                if km <= RADIUS_KM:
-                    adjusted_price = base_price
-                    revenue = adjusted_price * 1000 * quantity
-                    transport = (km/10)*TRANSPORT_RATE*quantity
-                    risk = revenue*((SPOILAGE_PER_10KM*(km/10))+HANDLING_RISK)
-                    net = revenue - transport - risk
 
-                    all_options.append({
-                        "Type":cat,
-                        "Name":row[name_col],
-                        "Distance_km":round(km,2),
-                        "Net_Profit":round(net,2),
-                        "Lat":row[lat_col],
-                        "Lon":row[lon_col]
-                    })
+                try:
+                    route = requests.get(
+                        f"http://router.project-osrm.org/route/v1/driving/"
+                        f"{v_lon},{v_lat};{row[lon_col]},{row[lat_col]}"
+                        f"?overview=false", timeout=10).json()
 
-    df = pd.DataFrame(all_options)
+                    if "routes" in route:
+                        km = route["routes"][0]["distance"]/1000
+                    else:
+                        km = haversine(v_lat,v_lon,row[lat_col],row[lon_col])
+                except:
+                    km = haversine(v_lat,v_lon,row[lat_col],row[lon_col])
+
+                if km > RADIUS_KM:
+                    continue
+
+                margin = category_params[cat]["margin"]
+
+                adjusted_price = base_price * (1 + margin)
+                revenue = adjusted_price * 1000 * quantity
+                transport = (km/10)*TRANSPORT_RATE*quantity
+                risk = revenue*((SPOILAGE_PER_10KM*(km/10))+HANDLING_RISK)
+                net = revenue - transport - risk
+
+                results.append({
+                    "Type":cat,
+                    "Name":row[name_col],
+                    "Distance_km":round(km,2),
+                    "Net_Profit":round(net,2),
+                    "Lat":row[lat_col],
+                    "Lon":row[lon_col],
+                    "Color":category_params[cat]["color"]
+                })
+
+    df = pd.DataFrame(results)
 
     df_top10 = df.sort_values("Distance_km").head(10).reset_index(drop=True)
     df_top10["Rank"] = df_top10.index+1
@@ -176,7 +214,7 @@ if run:
     best = df_top10.loc[df_top10["Net_Profit"].idxmax()]
 
     col1, col2 = st.columns(2)
-    col1.metric("🏆 Most Profitable", best["Name"])
+    col1.metric("🏆 Most Profitable Option", best["Name"])
     col2.metric("💰 Net Profit (₹)", best["Net_Profit"])
 
     # ========================================================
@@ -190,22 +228,20 @@ if run:
     # ========================================================
     st.subheader("🗺 Top 10 Location Map")
 
-    m = folium.Map(location=[v_lat, v_lon], zoom_start=9)
+    m = folium.Map(location=[v_lat,v_lon], zoom_start=10)
 
-    folium.Marker([v_lat,v_lon], tooltip="Village",
+    folium.Marker([v_lat,v_lon],
+                  popup=f"Village: {village_name}",
                   icon=folium.Icon(color="black")).add_to(m)
 
     for _, row in df_top10.iterrows():
         folium.Marker(
             [row["Lat"],row["Lon"]],
-            tooltip=f"Rank {row['Rank']} - {row['Name']}",
-            icon=folium.Icon(color="green")
+            popup=f"Rank {row['Rank']}<br>{row['Type']}<br>{row['Name']}",
+            icon=folium.Icon(color=row["Color"])
         ).add_to(m)
 
     st_folium(m, width=1100, height=500)
 
-    # ========================================================
-    # 📋 TABLE
-    # ========================================================
     st.subheader("🏅 Ranked Top 10 Alternatives")
     st.dataframe(df_top10)
