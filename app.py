@@ -1,6 +1,6 @@
 # ============================================================
-# 🥭🍃 ADVANCED FARMER PROFIT INTELLIGENCE SYSTEM 🍃🥭
-# AI + ROUTING + PROFESSIONAL VISUALIZATION VERSION
+# 🥭 FARMER PROFIT INTELLIGENCE SYSTEM
+# 🚀 FINAL PRODUCTION VERSION
 # ============================================================
 
 import streamlit as st
@@ -9,12 +9,11 @@ import numpy as np
 import folium
 from streamlit_folium import st_folium
 import plotly.graph_objects as go
-import requests
 
 st.set_page_config(layout="wide")
 
-st.title("🥭🍃 Mango Profit Intelligence Dashboard 🍃🥭")
-st.markdown("### 🚜 Smart AI Marketing Decision Support for Farmers")
+st.title("🥭 Mango Profit Intelligence Dashboard")
+st.markdown("### 🚜 Smart AI Decision Support for Farmers")
 
 # ---------------- LOAD DATA ----------------
 @st.cache_data
@@ -59,7 +58,7 @@ def haversine(lat1, lon1, lat2, lon2):
     return R * 2*np.arcsin(np.sqrt(a))
 
 # ---------------- SIDEBAR ----------------
-st.sidebar.header("👨‍🌾 Farmer Information")
+st.sidebar.header("👨‍🌾 Farmer Details")
 
 farmer_name = st.sidebar.text_input("👤 Farmer Name")
 mobile = st.sidebar.text_input("📱 Mobile Number")
@@ -67,22 +66,29 @@ mobile = st.sidebar.text_input("📱 Mobile Number")
 village_name_col = detect_name(villages)
 v_lat_col, v_lon_col = detect_lat_lon(villages)
 
-selected_village = st.sidebar.selectbox("🏡 Select Village",
-                                        villages[village_name_col].unique())
+selected_village = st.sidebar.selectbox(
+    "🏡 Select Village",
+    villages[village_name_col].unique()
+)
 
-variety = st.sidebar.selectbox("🥭 Select Mango Variety",
-                               ["Banganapalli","Totapuri","Neelam","Rasalu"])
+variety = st.sidebar.selectbox(
+    "🥭 Select Variety",
+    ["Banganapalli","Totapuri","Neelam","Rasalu"]
+)
 
-quantity_qtl = st.sidebar.number_input("📦 Quantity (Quintals)",
-                                       min_value=1, value=10)
+quantity_qtl = st.sidebar.number_input(
+    "📦 Quantity (Quintals)",
+    min_value=1,
+    value=10
+)
 
-if "run" not in st.session_state:
-    st.session_state.run = False
+if "run_analysis" not in st.session_state:
+    st.session_state.run_analysis = False
 
 if st.sidebar.button("🚀 Run Smart Mango Analysis"):
-    st.session_state.run = True
+    st.session_state.run_analysis = True
 
-# ---------------- VARIETY RULES ----------------
+# ---------------- VARIETY LOGIC ----------------
 variety_acceptance = {
     "Mandi":["Banganapalli","Totapuri","Neelam","Rasalu"],
     "Processing":["Totapuri","Neelam"],
@@ -110,8 +116,8 @@ category_colors = {
     "Abroad Export":"red"
 }
 
-# ---------------- MAIN ----------------
-if st.session_state.run:
+# ---------------- MAIN ANALYSIS ----------------
+if st.session_state.run_analysis:
 
     st.markdown(f"## 🙏🥭 Namaste **{farmer_name}**")
     st.markdown("### 📊 Here is your Smart Mango Profit Report")
@@ -181,7 +187,7 @@ if st.session_state.run:
     c1.metric("💰 Base Price (₹/kg)",round(base_price,2))
     c2.metric("🥇 Best Market",best["Name"])
     c3.metric("🏆 Expected Profit (₹)",best["Net Profit"])
-    c4.metric("📦 Quantity",quantity_qtl)
+    c4.metric("📦 Quantity (Qtl)",quantity_qtl)
 
     st.markdown("---")
 
@@ -190,23 +196,20 @@ if st.session_state.run:
 
     fig = go.Figure()
 
-    for cat in df_top10["Category"].unique():
-        df_cat = df_top10[df_top10["Category"]==cat]
-        fig.add_trace(go.Bar(
-            y=df_cat["Name"],
-            x=df_cat["Net Profit"],
-            orientation='h',
-            name=cat,
-            text=df_cat["Net Profit"],
-            textposition="outside"
-        ))
+    fig.add_trace(go.Bar(
+        y=df_top10["Name"],
+        x=df_top10["Net Profit"],
+        orientation='h',
+        text=df_top10["Net Profit"],
+        textposition="outside",
+        marker_color="darkgreen"
+    ))
 
     fig.update_layout(
         height=650,
-        barmode="group",
         xaxis_title="Net Profit (₹)",
         yaxis_title="Market Name",
-        title="🥭 Profit Comparison Across Markets"
+        yaxis=dict(autorange="reversed")
     )
 
     st.plotly_chart(fig,width="stretch")
@@ -230,7 +233,6 @@ if st.session_state.run:
             icon=folium.Icon(color=color)
         ).add_to(m)
 
-        # Draw route line (simple polyline)
         folium.PolyLine(
             locations=[[v_lat,v_lon],[row["Lat"],row["Lon"]]],
             color=color,
@@ -240,8 +242,28 @@ if st.session_state.run:
 
     st_folium(m,width=1100,height=600)
 
+    # ---------------- DOWNLOAD REPORT ----------------
+    csv = df_top10.to_csv(index=False).encode("utf-8")
+    st.download_button("📄 Download Top 10 Report",csv,
+                       "Top10_Mango_Profit_Report.csv","text/csv")
+
+    # ---------------- SMS RECOMMENDATION ----------------
+    st.subheader("📱🥭 Farmer Recommendation Message")
+
+    recommendation = f"""
+Namaste {farmer_name},
+
+Best selling option for your {quantity_qtl} quintals of {variety} mango:
+Market: {best['Name']}
+Expected Profit: ₹{best['Net Profit']}
+
+- Mango Profit Intelligence System
+"""
+
+    st.text_area("Ready to Send",recommendation,height=150)
+
     # ---------------- VARIETY LOGIC ----------------
-    st.subheader("🧠🥭 Variety Acceptance Rules")
+    st.subheader("🧠 Variety Acceptance Rules")
 
     for cat,vals in variety_acceptance.items():
         if variety in vals:
