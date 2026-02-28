@@ -1,6 +1,6 @@
 # ============================================================
-# 🏛 MANGO MARKET DECISION INTELLIGENCE DASHBOARD
-# Government Grade Agricultural Profit Optimization System
+# 🥭 MANGO MARKET DECISION INTELLIGENCE DASHBOARD 🥭
+# Advanced Agricultural Profit Optimization System
 # ============================================================
 
 import streamlit as st
@@ -12,8 +12,8 @@ import plotly.graph_objects as go
 
 st.set_page_config(layout="wide")
 
-st.title("🏛 Mango Market Decision Intelligence Dashboard")
-st.subheader("📊 Government Grade Agricultural Profit Optimization System")
+st.title("🥭 Mango Market Decision Intelligence Dashboard 🥭")
+st.subheader("📊 Advanced Agricultural Profit Optimization System 🥭")
 
 # ---------------- LOAD DATA ----------------
 @st.cache_data
@@ -44,6 +44,10 @@ def detect_lat_lon(df):
     return lat, lon
 
 def detect_name(df):
+    # This ensures real names are picked directly from CSV
+    for c in df.columns:
+        if c in ["market","place","unit_name","company_name","name"]:
+            return c
     for c in df.columns:
         if any(x in c for x in ["place","market","name"]):
             return c
@@ -58,25 +62,26 @@ def haversine(lat1, lon1, lat2, lon2):
     return R * 2*np.arcsin(np.sqrt(a))
 
 # ---------------- SIDEBAR ----------------
-st.sidebar.header("👨‍🌾 Farmer Details")
+st.sidebar.header("👨‍🌾 Farmer Details 🥭")
 
-farmer_name = st.sidebar.text_input("Farmer Name")
+farmer_name = st.sidebar.text_input("Farmer Name 🥭")
+
 selected_village = st.sidebar.selectbox(
-    "Select Village",
+    "Select Village 🏡",
     villages[detect_name(villages)].unique()
 )
 
 variety = st.sidebar.selectbox(
-    "Select Variety",
+    "Select Variety 🥭",
     ["Banganapalli","Totapuri","Neelam","Rasalu"]
 )
 
-quantity_qtl = st.sidebar.number_input("Quantity (Quintals)", min_value=1, value=10)
+quantity_qtl = st.sidebar.number_input("Quantity (Quintals) 📦", min_value=1, value=10)
 
 if "run" not in st.session_state:
     st.session_state.run = False
 
-if st.sidebar.button("🚀 Run Smart Analysis"):
+if st.sidebar.button("🚀 Run Smart Analysis 🥭"):
     st.session_state.run = True
 
 # ---------------- VARIETY RULES ----------------
@@ -101,8 +106,8 @@ margin_map = {
 # ---------------- MAIN ----------------
 if st.session_state.run:
 
-    st.markdown(f"## 🙏 Namaste **{farmer_name}**")
-    st.markdown("### 📈 Strategic Profit Intelligence Summary")
+    st.markdown(f"## 🙏🥭 Namaste **{farmer_name}** 🥭")
+    st.markdown("### 📈 Strategic Profit Intelligence Summary 🥭")
 
     village_row = villages[villages[detect_name(villages)]==selected_village].iloc[0]
     v_lat, v_lon = village_row[detect_lat_lon(villages)[0]], village_row[detect_lat_lon(villages)[1]]
@@ -131,7 +136,7 @@ if st.session_state.run:
     for cat,df in category_dfs.items():
         if variety not in variety_acceptance[cat]: continue
         lat,lon = detect_lat_lon(df)
-        name_col = "market" if cat=="Mandi" else detect_name(df)
+        name_col = detect_name(df)   # ensures real CSV names used
         if lat is None: continue
 
         for _,row in df.iterrows():
@@ -143,44 +148,33 @@ if st.session_state.run:
 
                 results.append({
                     "Category":cat,
-                    "Name":row[name_col],
+                    "Name":row[name_col],   # real names
                     "Distance_km":round(dist,2),
                     "Net Profit":round(net,2),
                     "Lat":row[lat],
                     "Lon":row[lon]
                 })
 
-    df_all = pd.DataFrame(results).drop_duplicates(subset=["Name","Category"])
-
-    # -------- Balanced Top 10 --------
-    df_top10 = pd.concat([
-        df_all[df_all["Category"]=="Mandi"].sort_values("Net Profit",ascending=False).head(3),
-        df_all[df_all["Category"]=="Processing"].sort_values("Net Profit",ascending=False).head(2),
-        df_all[df_all["Category"]=="Pulp"].sort_values("Net Profit",ascending=False).head(2),
-        df_all[df_all["Category"]=="Pickle"].sort_values("Net Profit",ascending=False).head(2),
-        df_all[df_all["Category"].isin(["Local Export","Abroad Export"])].sort_values("Net Profit",ascending=False).head(1)
-    ]).reset_index(drop=True)
+    df_top10 = pd.DataFrame(results).drop_duplicates(subset=["Name","Category"])\
+        .sort_values("Net Profit",ascending=False).head(10).reset_index(drop=True)
 
     df_top10["Rank"] = df_top10.index + 1
-
     best = df_top10.iloc[0]
 
     # ---------------- METRICS ----------------
     c1,c2,c3,c4 = st.columns(4)
     c1.metric("💰 Base Price (₹/kg)",round(base_price,2))
-    c2.metric("🥇 Best Alternative",best["Name"])
+    c2.metric("🥇 Best Alternative 🥭",best["Name"])
     c3.metric("🏆 Net Profit (₹)",best["Net Profit"])
     c4.metric("📦 Quantity (Qtl)",quantity_qtl)
 
     st.markdown("---")
 
-    # ---------------- PROFIT RECOMMENDATION ----------------
-    st.success(f"📢 Recommendation: Sell your produce at **{best['Name']}** "
-               f"under **{best['Category']}** category for maximum estimated "
-               f"net profit of ₹ {best['Net Profit']:,.0f}.")
+    st.success(f"📢🥭 Recommendation: Sell at **{best['Name']}** under "
+               f"**{best['Category']}** for maximum estimated profit of ₹ {best['Net Profit']:,.0f} 🥭")
 
     # ---------------- BAR GRAPH ----------------
-    st.subheader("📊 Profit Comparison (Top 10)")
+    st.subheader("📊🥭 Profit Comparison (Top 10 Alternatives)")
 
     df_sorted = df_top10.sort_values("Net Profit")
 
@@ -191,63 +185,36 @@ if st.session_state.run:
         orientation='h',
         text=[f"₹{x:,.0f}" for x in df_sorted["Net Profit"]],
         textposition="outside",
-        marker=dict(color=df_sorted["Net Profit"],
-                    colorscale="Turbo",
-                    line=dict(color="black", width=1.5))
+        marker=dict(
+            color=df_sorted["Net Profit"],
+            colorscale="Turbo",
+            line=dict(color="black", width=1.5)
+        )
     ))
 
     fig.update_layout(height=750, yaxis=dict(autorange="reversed"))
     st.plotly_chart(fig, width="stretch")
 
-    # ---------------- RANKING BADGES ----------------
-    st.subheader("🏅 Top Rankings")
-
-    medals = {1:"🥇",2:"🥈",3:"🥉"}
-
-    for _,row in df_top10.iterrows():
-        badge = medals.get(row["Rank"], f"🏅 {row['Rank']}")
-        st.markdown(f"{badge} **{row['Name']}** ({row['Category']}) → ₹ {row['Net Profit']:,.0f}")
-
-    # ---------------- CATEGORY LEGEND ----------------
-    st.subheader("🎨 Category Color Legend")
-    st.markdown("""
-    🔵 Mandi  
-    🟣 Processing  
-    🟢 Pulp  
-    🟠 Pickle  
-    🔴 Export  
-    """)
-
     # ---------------- MAP ----------------
-    st.subheader("🗺 Top 10 Alternatives with Routes")
+    st.subheader("🗺🥭 Top 10 Alternatives with Routes")
 
     m = folium.Map(location=[v_lat,v_lon],zoom_start=9)
 
     folium.Marker([v_lat,v_lon],
-                  popup="🏡 Village",
+                  popup="🏡 Village 🥭",
                   icon=folium.Icon(color="black")).add_to(m)
 
-    color_map = {
-        "Mandi":"blue",
-        "Processing":"purple",
-        "Pulp":"green",
-        "Pickle":"orange",
-        "Local Export":"red",
-        "Abroad Export":"red"
-    }
-
     for _,row in df_top10.iterrows():
-        color = color_map.get(row["Category"],"blue")
 
         folium.Marker(
             [row["Lat"],row["Lon"]],
-            popup=f"{row['Name']} ({row['Category']})",
-            icon=folium.Icon(color=color)
+            popup=f"🥭 {row['Name']} ({row['Category']})",
+            icon=folium.Icon(color="green")
         ).add_to(m)
 
         folium.PolyLine(
             [[v_lat,v_lon],[row["Lat"],row["Lon"]]],
-            color=color,
+            color="orange",
             weight=4,
             opacity=0.8
         ).add_to(m)
