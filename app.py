@@ -1,24 +1,22 @@
 # ============================================================
 # 🥭 FARMER PROFIT INTELLIGENCE SYSTEM
-# Smart Mango Marketing Decision Engine
-# Streamlit Final Stable Version
+# FINAL STABLE VERSION (CUSTOMIZED TO YOUR CSV STRUCTURE)
 # ============================================================
 
 import streamlit as st
 import pandas as pd
 import numpy as np
-import requests
 import folium
 from streamlit_folium import st_folium
 import plotly.express as px
 
-# ---------------- PAGE CONFIG ----------------
 st.set_page_config(layout="wide")
 
+# ---------------- STYLE ----------------
 st.markdown("""
     <style>
-    body {background-color: #f7f9fc;}
-    .big-font {font-size:22px !important; font-weight:bold;}
+    body {background-color: #f4f7fb;}
+    .stMetric {font-size:20px;}
     </style>
 """, unsafe_allow_html=True)
 
@@ -37,52 +35,37 @@ def load_data():
     local_export = pd.read_csv("cleaned_local_export.csv")
     abroad_export = pd.read_csv("cleaned_abroad_export.csv")
 
-    datasets = [villages, prices, geo, processing,
-                pulp, pickle_units, local_export, abroad_export]
+    dfs = [villages, prices, geo, processing,
+           pulp, pickle_units, local_export, abroad_export]
 
-    for df in datasets:
+    for df in dfs:
         df.columns = df.columns.str.strip().str.lower()
 
     return villages, prices, geo, processing, pulp, pickle_units, local_export, abroad_export
 
 villages, prices, geo, processing, pulp, pickle_units, local_export, abroad_export = load_data()
 
-# ---------------- HELPER FUNCTIONS ----------------
-def detect_cols(df):
-    name, lat, lon = None, None, None
-    for c in df.columns:
-        if "lat" in c:
-            lat = c
-        if "lon" in c:
-            lon = c
-        if any(x in c for x in ["name","village","market","firm","facility","place","panchayat","hub"]):
-            name = c
-    return name, lat, lon
-
-def haversine(lat1, lon1, lat2, lon2):
-    R = 6371
-    lat1, lon1, lat2, lon2 = map(np.radians,[lat1, lon1, lat2, lon2])
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
-    a = np.sin(dlat/2)**2 + np.cos(lat1)*np.cos(lat2)*np.sin(dlon/2)**2
-    return R * 2*np.arcsin(np.sqrt(a))
-
 # ---------------- SIDEBAR ----------------
-st.sidebar.header("📝 Farmer Details")
+st.sidebar.header("👨‍🌾 Farmer Details")
 
-farmer_name = st.sidebar.text_input("👨‍🌾 Farmer Name")
-mobile = st.sidebar.text_input("📱 Mobile Number")
+farmer_name = st.sidebar.text_input("Farmer Name")
+mobile = st.sidebar.text_input("Mobile Number")
 
-village_col, v_lat_col, v_lon_col = detect_cols(villages)
-villages[village_col] = villages[village_col].astype(str)
+village_name_col = "gram panchayat"
+v_lat_col = "latitude"
+v_lon_col = "longitude"
 
-selected_village = st.sidebar.selectbox("🏡 Select Village",
-                                         villages[village_col].unique())
+selected_village = st.sidebar.selectbox(
+    "Select Village",
+    villages[village_name_col].unique()
+)
 
-variety = st.sidebar.selectbox("🥭 Select Variety",
-                               ["Banganapalli","Totapuri","Neelam","Rasalu"])
+variety = st.sidebar.selectbox(
+    "Select Variety",
+    ["Banganapalli","Totapuri","Neelam","Rasalu"]
+)
 
-quantity_qtl = st.sidebar.number_input("📦 Quantity (Quintals)", min_value=1, value=10)
+quantity_qtl = st.sidebar.number_input("Quantity (Quintals)", min_value=1, value=10)
 
 run = st.sidebar.button("🚀 Run Smart Analysis")
 
@@ -96,27 +79,36 @@ variety_acceptance = {
     "Abroad Export": ["Banganapalli"]
 }
 
+# ---------------- DISTANCE FUNCTION ----------------
+def haversine(lat1, lon1, lat2, lon2):
+    R = 6371
+    lat1, lon1, lat2, lon2 = map(np.radians,[lat1, lon1, lat2, lon2])
+    dlat = lat2 - lat1
+    dlon = lon2 - lon1
+    a = np.sin(dlat/2)**2 + np.cos(lat1)*np.cos(lat2)*np.sin(dlon/2)**2
+    return R * 2*np.arcsin(np.sqrt(a))
+
 # ---------------- MAIN ANALYSIS ----------------
 if run:
 
-    village_row = villages[villages[village_col] == selected_village].iloc[0]
+    village_row = villages[villages[village_name_col] == selected_village].iloc[0]
     v_lat = village_row[v_lat_col]
     v_lon = village_row[v_lon_col]
 
-    # ---- Base Price ----
-    mandi_data = prices.merge(geo, how="left")
-    name_col_m, lat_col_m, lon_col_m = detect_cols(mandi_data)
+    # Correct merge
+    mandi_data = prices.merge(geo, on="market", how="left")
 
-    mandi_data = mandi_data.dropna(subset=[lat_col_m, lon_col_m])
+    mandi_data = mandi_data.dropna(subset=["latitude","longitude"])
 
-    mandi_data["dist"] = mandi_data.apply(
-        lambda r: haversine(v_lat,v_lon,r[lat_col_m],r[lon_col_m]), axis=1
+    mandi_data["distance"] = mandi_data.apply(
+        lambda r: haversine(v_lat,v_lon,r["latitude"],r["longitude"]), axis=1
     )
 
-    nearest = mandi_data.loc[mandi_data["dist"].idxmin()]
-    base_price = nearest[[c for c in mandi_data.columns if "price" in c][0]]
+    nearest = mandi_data.loc[mandi_data["distance"].idxmin()]
+    base_price = nearest["today_price(rs/kg)"]
 
-    # ---- Collect Alternatives ----
+    results = []
+
     category_dfs = {
         "Mandi": mandi_data,
         "Processing": processing,
@@ -126,19 +118,21 @@ if run:
         "Abroad Export": abroad_export
     }
 
-    results = []
-
     for category, df in category_dfs.items():
 
         if variety not in variety_acceptance[category]:
             continue
 
-        name_col, lat_col, lon_col = detect_cols(df)
+        if "latitude" not in df.columns:
+            continue
 
         for _, row in df.iterrows():
-            if pd.notnull(row[lat_col]) and pd.notnull(row[lon_col]):
 
-                dist = haversine(v_lat, v_lon, row[lat_col], row[lon_col])
+            if pd.notnull(row["latitude"]) and pd.notnull(row["longitude"]):
+
+                dist = haversine(v_lat, v_lon,
+                                 row["latitude"],
+                                 row["longitude"])
 
                 transport = (dist/10) * 2000 * quantity_qtl
 
@@ -155,31 +149,36 @@ if run:
                 revenue = adjusted_price * 100 * quantity_qtl
                 net_profit = revenue - transport
 
+                name_col = [c for c in df.columns if "place" in c or "market" in c][0]
+
                 results.append({
                     "Category":category,
                     "Name":row[name_col],
                     "Distance_km":round(dist,2),
-                    "Revenue":round(revenue,2),
-                    "Transport":round(transport,2),
                     "Net Profit":round(net_profit,2),
-                    "Lat":row[lat_col],
-                    "Lon":row[lon_col]
+                    "Lat":row["latitude"],
+                    "Lon":row["longitude"]
                 })
 
     df_result = pd.DataFrame(results)
+
+    if df_result.empty:
+        st.error("❌ No alternatives found. Check dataset lat/lon.")
+        st.stop()
+
     df_top10 = df_result.sort_values("Net Profit", ascending=False).head(10)
     df_top10.reset_index(drop=True, inplace=True)
-    df_top10["Rank"] = df_top10.index+1
+    df_top10["Rank"] = df_top10.index + 1
 
     best = df_top10.iloc[0]
 
-    # ---------------- SUMMARY CARDS ----------------
+    # ---------------- METRICS ----------------
     col1,col2,col3,col4 = st.columns(4)
 
     col1.metric("💰 Base Price (₹/kg)", round(base_price,2))
-    col2.metric("📈 Total Revenue (₹)", round(best["Revenue"],2))
-    col3.metric("🏆 Best Option", best["Name"])
-    col4.metric("🥇 Best Profit (₹)", round(best["Net Profit"],2))
+    col2.metric("🏆 Best Market", best["Name"])
+    col3.metric("🥇 Best Profit (₹)", best["Net Profit"])
+    col4.metric("📦 Quantity (Qtl)", quantity_qtl)
 
     st.markdown("---")
 
@@ -195,8 +194,7 @@ if run:
     st.plotly_chart(fig, use_container_width=True)
 
     # ---------------- TABLE ----------------
-    st.subheader("📋 Top 10 Best Alternatives Ranked")
-
+    st.subheader("📋 Top 10 Ranked Alternatives")
     st.dataframe(df_top10[["Rank","Name","Category","Distance_km","Net Profit"]])
 
     # ---------------- MAP ----------------
@@ -215,7 +213,7 @@ if run:
 
     st_folium(m, width=1000, height=500)
 
-    # ---------------- VARIETY LOGIC DISPLAY ----------------
+    # ---------------- VARIETY LOGIC ----------------
     st.subheader("🧠 Variety Filtering Logic")
 
     for cat, vals in variety_acceptance.items():
