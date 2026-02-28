@@ -1,6 +1,6 @@
 # ============================================================
 # 🥭 FARMER PROFIT INTELLIGENCE SYSTEM
-# FULLY FIXED UNIVERSAL VERSION
+# FINAL STABLE VERSION (NO FLICKER • WHITE THEME • 2026 READY)
 # ============================================================
 
 import streamlit as st
@@ -11,6 +11,17 @@ from streamlit_folium import st_folium
 import plotly.express as px
 
 st.set_page_config(layout="wide")
+
+# ---------------- WHITE THEME ----------------
+st.markdown("""
+    <style>
+        .stApp { background-color: white; }
+        html, body { background-color: white; color: black; }
+        .stSidebar { background-color: #f8f9fa; }
+        h1, h2, h3 { font-weight: 700; }
+        .stMetric { font-weight: bold; }
+    </style>
+""", unsafe_allow_html=True)
 
 st.title("🥭 Farmer Profit Intelligence System")
 st.subheader("Smart Mango Marketing Decision Engine")
@@ -82,7 +93,12 @@ variety = st.sidebar.selectbox(
 
 quantity_qtl = st.sidebar.number_input("Quantity (Quintals)", min_value=1, value=10)
 
-run = st.sidebar.button("🚀 Run Smart Analysis")
+# ---------------- SESSION STATE FIX ----------------
+if "run_analysis" not in st.session_state:
+    st.session_state.run_analysis = False
+
+if st.sidebar.button("🚀 Run Smart Analysis"):
+    st.session_state.run_analysis = True
 
 # ---------------- VARIETY LOGIC ----------------
 variety_acceptance = {
@@ -95,17 +111,16 @@ variety_acceptance = {
 }
 
 # ---------------- MAIN ANALYSIS ----------------
-if run:
+if st.session_state.run_analysis:
 
     village_row = villages[villages[village_name_col] == selected_village].iloc[0]
     v_lat = village_row[v_lat_col]
     v_lon = village_row[v_lon_col]
 
-    # Proper merge
+    # Merge price and geo on market
     mandi_data = prices.merge(geo, on="market", how="left")
 
     lat_col_m, lon_col_m = detect_lat_lon(mandi_data)
-
     mandi_data = mandi_data.dropna(subset=[lat_col_m, lon_col_m])
 
     mandi_data["distance"] = mandi_data.apply(
@@ -124,6 +139,15 @@ if run:
         "Pickle": pickle_units,
         "Local Export": local_export,
         "Abroad Export": abroad_export
+    }
+
+    margin_map = {
+        "Mandi":0,
+        "Processing":0.03,
+        "Pulp":0.04,
+        "Pickle":0.025,
+        "Local Export":0.05,
+        "Abroad Export":0.07
     }
 
     for category, df in category_dfs.items():
@@ -146,17 +170,7 @@ if run:
                                  row[lon_col])
 
                 transport = (dist/10) * 2000 * quantity_qtl
-
-                margin = {
-                    "Mandi":0,
-                    "Processing":0.03,
-                    "Pulp":0.04,
-                    "Pickle":0.025,
-                    "Local Export":0.05,
-                    "Abroad Export":0.07
-                }[category]
-
-                adjusted_price = base_price * (1+margin)
+                adjusted_price = base_price * (1+margin_map[category])
                 revenue = adjusted_price * 100 * quantity_qtl
                 net_profit = revenue - transport
 
@@ -183,7 +197,6 @@ if run:
 
     # ---------------- METRICS ----------------
     col1,col2,col3,col4 = st.columns(4)
-
     col1.metric("💰 Base Price (₹/kg)", round(base_price,2))
     col2.metric("🏆 Best Market", best["Name"])
     col3.metric("🥇 Best Profit (₹)", best["Net Profit"])
@@ -193,9 +206,13 @@ if run:
 
     # ---------------- BAR CHART ----------------
     st.subheader("📊 Profit Comparison (Top 10)")
-    fig = px.bar(df_top10, x="Name", y="Net Profit",
-                 color="Category", text="Net Profit")
-    st.plotly_chart(fig, use_container_width=True)
+    fig = px.bar(df_top10,
+                 x="Name",
+                 y="Net Profit",
+                 color="Category",
+                 text="Net Profit")
+
+    st.plotly_chart(fig, width="stretch")
 
     # ---------------- TABLE ----------------
     st.subheader("📋 Top 10 Ranked Alternatives")
